@@ -30,5 +30,8 @@ app.use('/api', apiRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
-
+// توجيه الزائر تلقائياً من الصفحة الرئيسية إلى المتجر
+app.get('/', (req, res) => {
+  res.redirect('/store/');
+});
 module.exports = app;
