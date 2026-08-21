@@ -1,0 +1,31 @@
+{
+  "name": "novendigit-backend",
+  "version": "1.0.0",
+  "description": "NOVENDIGIT backend — license system, orders, products (Stage 1: licensing foundation)",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "migrate": "node src/database/migrate.js",
+    "migrate:down": "node src/database/migrate.js down",
+    "seed": "node src/database/seeds/seed-admin.js",
+    "test": "node --test tests/"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "pg": "^8.12.0",
+    "dotenv": "^16.4.5",
+    "bcrypt": "^5.1.1",
+    "jsonwebtoken": "^9.0.2",
+    "express-rate-limit": "^7.4.0",
+    "helmet": "^7.1.0",
+    "cors": "^2.8.5",
+    "express-validator": "^7.2.0",
+    "cookie-parser": "^1.4.6"
+  },
+  "devDependencies": {}
+}
