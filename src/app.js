@@ -15,12 +15,7 @@ if (config.nodeEnv === 'production') app.set('trust proxy', 1);
 app.use(helmet());
 app.use('/admin', express.static(path.join(__dirname, '../public/admin')));
 app.use('/store', express.static(path.join(__dirname, '../public/storefront')));
-app.use(
-  cors({
-    origin: [config.storeUrl],
-    credentials: true,
-  })
-);
+app.use(cors());
 app.use(express.json({ limit: '100kb' }));
 app.use(cookieParser());
 app.use(standardLimiter);
