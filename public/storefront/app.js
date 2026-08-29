@@ -1,20 +1,28 @@
+// Theme bootstrap — reads a stored theme name so the admin panel can control
+// the palette later just by writing to localStorage('nd-theme') or by
+// rendering the page with a data-theme attribute already set server-side.
+(function applyStoredTheme() {
+  const stored = localStorage.getItem('nd-theme');
+  if (stored) document.documentElement.setAttribute('data-theme', stored);
+})();
+
 const state = { products: [], user: null };
 
 const views = {
   store: document.querySelector('#products'),
-  detail: document.querySelector('#detailView'),
   login: document.querySelector('#loginView'),
   register: document.querySelector('#registerView'),
   account: document.querySelector('#accountView'),
 };
 const productGrid = document.querySelector('#productGrid');
 const storeStatus = document.querySelector('#storeStatus');
-const detail = document.querySelector('#productDetail');
-const authNav = document.querySelector('#authNav');
-const menuButton = document.querySelector('#menuButton');
-const mainNav = document.querySelector('#mainNav');
 const loginSubmit = document.querySelector('#loginSubmit');
 const registerSubmit = document.querySelector('#registerSubmit');
+
+const sheet = document.querySelector('#productSheet');
+const sheetBackdrop = document.querySelector('#sheetBackdrop');
+const sheetContent = document.querySelector('#sheetContent');
+const sheetClose = document.querySelector('#sheetClose');
 
 function setStatus(element, message, type = '') {
   element.textContent = message;
@@ -42,18 +50,23 @@ async function api(path, options = {}) {
   return body.data;
 }
 
-function imageMarkup(url, alt) {
-  if (url) return `<img class="product-image" src="${escapeAttribute(url)}" alt="${escapeAttribute(alt)}">`;
-  return '<div class="product-image placeholder" aria-hidden="true">N</div>';
-}
-
 function escapeAttribute(value) {
   return String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
 }
 
+function imageMarkup(url, alt, className = 'product-image') {
+  if (url) return `<img class="${className}" src="${escapeAttribute(url)}" alt="${escapeAttribute(alt)}">`;
+  return `<div class="${className} placeholder" aria-hidden="true">N</div>`;
+}
+
 function productCard(product) {
-  const description = product.short_description || product.description || 'A NOVENDIGIT digital tool.';
-  return `<article class="product-card"><a class="card-link" href="#product/${encodeURIComponent(product.slug)}">${imageMarkup(product.image_url, product.name)}<div class="product-card-body"><h3>${escapeAttribute(product.name)}</h3><p class="product-description">${escapeAttribute(description)}</p><div class="product-meta"><span>v${escapeAttribute(product.version)}</span><span class="product-price">${escapeAttribute(product.currency)} ${Number(product.price_cents / 100).toFixed(2)}</span></div></div></a></article>`;
+  return `<article class="product-card glass" data-slug="${escapeAttribute(product.slug)}">
+    ${imageMarkup(product.image_url, product.name)}
+    <div class="product-card-body">
+      <h3>${escapeAttribute(product.name)}</h3>
+      <span class="product-price">${escapeAttribute(product.currency)} ${Number(product.price_cents / 100).toFixed(2)}</span>
+    </div>
+  </article>`;
 }
 
 async function loadProducts() {
@@ -68,24 +81,84 @@ async function loadProducts() {
   }
 }
 
-async function showProduct(slug) {
-  detail.innerHTML = '<p class="empty">Loading product...</p>';
+// --- Product bottom sheet -------------------------------------------------
+
+function contactMarkup() {
+  return `<div class="sheet-contact">
+    <p class="sheet-contact-label">Contact us to get your key</p>
+    <a class="contact-row" href="mailto:admin@novendigit.com"><span class="bn-icon">✉</span> Email</a>
+    <a class="contact-row" href="https://t.me/" target="_blank" rel="noreferrer"><span class="bn-icon">◉</span> Telegram</a>
+    <a class="contact-row" href="https://wa.me/" target="_blank" rel="noreferrer"><span class="bn-icon">◌</span> WhatsApp</a>
+  </div>`;
+}
+
+function renderSheet(product) {
+  sheetContent.innerHTML = `
+    ${imageMarkup(product.image_url, product.name, 'sheet-media')}
+    <h2 id="sheetTitle">${escapeAttribute(product.name)}</h2>
+    <div class="sheet-meta">
+      <span>v${escapeAttribute(product.version)}</span>
+      <span class="product-price">${escapeAttribute(product.currency)} ${Number(product.price_cents / 100).toFixed(2)}</span>
+    </div>
+    <button id="requestCodeButton" class="button sheet-cta" type="button">طلب كود التفعيل</button>
+    <div id="sheetContactSlot"></div>
+  `;
+  document.querySelector('#requestCodeButton').addEventListener('click', (event) => {
+    event.currentTarget.remove();
+    document.querySelector('#sheetContactSlot').innerHTML = contactMarkup();
+  });
+}
+
+async function openSheet(slug) {
+  sheet.hidden = false;
+  sheetBackdrop.hidden = false;
+  sheet.setAttribute('aria-hidden', 'false');
+  requestAnimationFrame(() => {
+    sheet.classList.add('open');
+    sheetBackdrop.classList.add('open');
+  });
+  sheetContent.innerHTML = '<p class="empty">Loading...</p>';
   try {
-    const product = await api(`/api/products/${encodeURIComponent(slug)}`);
-    detail.innerHTML = `<div>${product.image_url ? `<img class="detail-media" src="${escapeAttribute(product.image_url)}" alt="${escapeAttribute(product.name)}">` : '<div class="detail-media placeholder" aria-hidden="true">N</div>'}</div><div class="detail-copy"><p class="eyebrow">NOVENDIGIT product</p><h1 id="detailTitle">${escapeAttribute(product.name)}</h1><p class="detail-description">${escapeAttribute(product.description || product.short_description || 'A NOVENDIGIT digital tool.')}</p><dl class="detail-facts"><div><dt>Version</dt><dd>${escapeAttribute(product.version)}</dd></div><div><dt>Price</dt><dd>${escapeAttribute(product.currency)} ${Number(product.price_cents / 100).toFixed(2)}</dd></div></dl><p class="lede">Purchases are arranged manually. Contact the administrator to purchase this product and receive your license key in person.</p></div>`;
+    let product = state.products.find((item) => item.slug === slug);
+    if (!product) product = await api(`/api/products/${encodeURIComponent(slug)}`);
+    renderSheet(product);
   } catch (error) {
-    detail.innerHTML = `<p class="empty">${escapeAttribute(error.message)}</p>`;
+    sheetContent.innerHTML = `<p class="empty">${escapeAttribute(error.message)}</p>`;
   }
+}
+
+function closeSheet() {
+  sheet.classList.remove('open');
+  sheetBackdrop.classList.remove('open');
+  sheet.setAttribute('aria-hidden', 'true');
+  setTimeout(() => { sheet.hidden = true; sheetBackdrop.hidden = true; }, 220);
+  if (window.location.hash.startsWith('#product/')) window.location.hash = '#products';
+}
+
+productGrid.addEventListener('click', (event) => {
+  const card = event.target.closest('.product-card');
+  if (!card) return;
+  window.location.hash = `#product/${encodeURIComponent(card.dataset.slug)}`;
+});
+sheetClose.addEventListener('click', closeSheet);
+sheetBackdrop.addEventListener('click', closeSheet);
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !sheet.hidden) closeSheet();
+});
+
+// --- View routing ----------------------------------------------------------
+
+function setActiveNav(name) {
+  document.querySelectorAll('.nav-link, .bottom-nav-link').forEach((link) => {
+    link.classList.toggle('active', link.dataset.view === name);
+  });
 }
 
 function showView(name) {
   Object.values(views).forEach((view) => view.classList.add('hidden'));
   const view = views[name] || views.store;
   view.classList.remove('hidden');
-  const detailView = document.querySelector('#detailView');
-  if (name === 'detail') detailView.classList.remove('hidden');
-  document.querySelectorAll('.nav-link').forEach((link) => link.classList.toggle('active', link.getAttribute('href') === `#${name === 'detail' ? 'products' : name}`));
-  if (mainNav) mainNav.classList.remove('open');
+  setActiveNav(name === 'store' ? 'products' : name);
   if (name === 'login' || name === 'register' || name === 'account') {
     view.classList.remove('view-enter');
     requestAnimationFrame(() => {
@@ -101,13 +174,13 @@ function openView(name) {
 }
 
 async function route() {
-  const hash = window.location.hash.slice(1) || 'store';
+  const hash = window.location.hash.slice(1) || 'products';
   if (hash.startsWith('product/')) {
-    Object.values(views).forEach((view) => view.classList.add('hidden'));
-    document.querySelector('#detailView').classList.remove('hidden');
-    await showProduct(decodeURIComponent(hash.slice(8)));
+    showView('store');
+    await openSheet(decodeURIComponent(hash.slice(8)));
     return;
   }
+  closeSheet();
   if (hash === 'login') { showView('login'); return; }
   if (hash === 'register') { showView('register'); return; }
   if (hash === 'account') {
@@ -128,21 +201,13 @@ async function loadAccount() {
     state.user = await api('/api/auth/me');
     accountEmail.textContent = `${state.user.email} · ${state.user.role}`;
     const licenses = await api('/api/licenses/mine');
-    licenseList.innerHTML = licenses.length ? licenses.map((license) => `<article class="license-card"><div><h3>${escapeAttribute(license.product_name)}</h3><p>Version access · ${escapeAttribute(license.product_slug)}</p></div><span class="license-state">${escapeAttribute(license.status)}</span></article>`).join('') : '<p class="empty">No licenses are assigned to this account yet.</p>';
+    licenseList.innerHTML = licenses.length ? licenses.map((license) => `<article class="license-card glass"><div><h3>${escapeAttribute(license.product_name)}</h3><p>${escapeAttribute(license.product_slug)}</p></div><span class="license-state">${escapeAttribute(license.status)}</span></article>`).join('') : '<p class="empty">No licenses are assigned to this account yet.</p>';
     setStatus(licenseStatus, `${licenses.length} license${licenses.length === 1 ? '' : 's'}`);
-    if (authNav) {
-      authNav.textContent = 'Account';
-      authNav.href = '#account';
-    }
   } catch (error) {
     state.user = null;
     accountEmail.textContent = '';
     licenseList.innerHTML = '';
     setStatus(licenseStatus, 'Please log in to view your account.', 'error');
-    if (authNav) {
-      authNav.textContent = 'Login / Register';
-      authNav.href = '#login';
-    }
   }
 }
 
@@ -182,9 +247,4 @@ document.querySelectorAll('.auth-trigger').forEach((trigger) => {
 });
 
 window.addEventListener('hashchange', route);
-if (menuButton) menuButton.addEventListener('click', () => {
-  const open = mainNav.classList.toggle('open');
-  menuButton.setAttribute('aria-expanded', String(open));
-});
-loadProducts();
 route();
