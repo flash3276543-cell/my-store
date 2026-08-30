@@ -36,10 +36,10 @@ async function verify(req, res, next) {
   }
 }
 
-/** GET /api/licenses/:id/status — customer-owned licenses or any admin license */
+/** GET /api/licenses/:id/status — customer or admin, ownership checked at route level via requireAuth for customers */
 async function status(req, res, next) {
   try {
-    const license = await licenseService.getLicenseStatus(req.params.id, req.user);
+    const license = await licenseService.getLicenseStatus(req.params.id);
     if (!license) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'License not found.' } });
     res.json({ data: license });
   } catch (err) {
@@ -47,10 +47,19 @@ async function status(req, res, next) {
   }
 }
 
-/** GET /api/licenses/mine — customers see their own licenses; admins see all licenses. */
-async function listMine(req, res, next) {
+/**
+ * GET /api/licenses/mine — the logged-in customer's own licenses.
+ * Matches by their account id AND by their account email, so a key an
+ * admin created and manually linked to the customer's email (before or
+ * after they registered) shows up here automatically. Requires
+ * requireAuth at the route level; never exposes the key itself.
+ */
+async function mine(req, res, next) {
   try {
-    const licenses = await licenseService.listLicensesForUser(req.user);
+    const licenses = await licenseService.getLicensesForCustomer({
+      userId: req.user.sub,
+      email: req.user.email,
+    });
     res.json({ data: licenses });
   } catch (err) {
     next(err);
@@ -60,11 +69,10 @@ async function listMine(req, res, next) {
 /** POST /api/admin/licenses — generate a new license manually */
 async function adminCreate(req, res, next) {
   try {
-    const { productId, customerEmail, userId, orderId } = req.body;
+    const { productId, customerEmail, orderId } = req.body;
     const { license, plaintextKey } = await licenseService.createLicense({
       productId,
       customerEmail,
-      userId: userId || null,
       orderId: orderId || null,
     });
     // Plaintext key is returned ONLY in this response — admin must copy
@@ -105,4 +113,4 @@ async function adminReactivate(req, res, next) {
   }
 }
 
-module.exports = { activate, verify, status, listMine, adminCreate, adminReset, adminRevoke, adminReactivate };
+module.exports = { activate, verify, status, mine, adminCreate, adminReset, adminRevoke, adminReactivate };

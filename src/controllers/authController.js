@@ -1,69 +1,66 @@
 const authService = require('../services/authService');
 
+const SESSION_COOKIE = 'novendigit_session';
+
+function cookieOptions(maxAge) {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge,
+  };
+}
+
 async function adminLogin(req, res, next) {
   try {
     const { email, password } = req.body;
     const { token, user } = await authService.login(email, password, { requireRole: 'admin' });
     res
-      .cookie('novendigit_session', token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 12 * 60 * 60 * 1000,
-      })
+      .cookie(SESSION_COOKIE, token, cookieOptions(12 * 60 * 60 * 1000))
       .json({ data: { token, user } });
   } catch (err) {
     next(err);
   }
 }
 
-async function customerRegister(req, res, next) {
+/** POST /api/auth/register — customer self-registration. */
+async function register(req, res, next) {
   try {
     const { email, password } = req.body;
-    const user = await authService.createUser({ email, password, role: 'customer' });
-    const { token } = await authService.login(email, password, { requireRole: 'customer' });
+    const { token, user } = await authService.register({ email, password });
     res
-      .cookie('novendigit_session', token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 30 * 24 * 60 * 60 * 1000,
-      })
       .status(201)
+      .cookie(SESSION_COOKIE, token, cookieOptions(30 * 24 * 60 * 60 * 1000))
       .json({ data: { token, user } });
   } catch (err) {
-    if (err.code === '23505') {
-      err = new authService.AuthError('EMAIL_ALREADY_REGISTERED', 'An account with that email already exists.', 409);
-    }
     next(err);
   }
 }
 
-async function customerLogin(req, res, next) {
+/** POST /api/auth/login — customer login (admins must use /api/auth/admin/login). */
+async function login(req, res, next) {
   try {
     const { email, password } = req.body;
     const { token, user } = await authService.login(email, password, { requireRole: 'customer' });
     res
-      .cookie('novendigit_session', token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 30 * 24 * 60 * 60 * 1000,
-      })
+      .cookie(SESSION_COOKIE, token, cookieOptions(30 * 24 * 60 * 60 * 1000))
       .json({ data: { token, user } });
   } catch (err) {
     next(err);
   }
 }
 
-async function profile(req, res, next) {
+/** GET /api/auth/me — returns the currently authenticated user (from a fresh DB read, not just the JWT payload). */
+async function me(req, res, next) {
   try {
-    const user = await authService.getUserProfile(req.user.sub);
-    if (!user) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'User not found.' } });
-    res.json({ data: user });
+    const user = await authService.findUserById(req.user.sub);
+    if (!user) {
+      return res.status(401).json({ error: { code: 'UNAUTHENTICATED', message: 'Login required.' } });
+    }
+    res.json({ data: { user } });
   } catch (err) {
     next(err);
   }
 }
 
-module.exports = { adminLogin, customerRegister, customerLogin, profile };
+module.exports = { adminLogin, register, login, me };
