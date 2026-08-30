@@ -26,21 +26,6 @@ async function createLicense({ productId, orderId = null, userId = null, custome
     throw new LicenseError('INVALID_INPUT', 'productId and customerEmail are required.');
   }
 
-  const productResult = await pool.query('SELECT id FROM products WHERE id = $1 AND is_active = true', [productId]);
-  if (!productResult.rows[0]) {
-    throw new LicenseError('PRODUCT_NOT_FOUND_OR_INACTIVE', 'The selected product is not available.', 404);
-  }
-
-  const customerResult = userId
-    ? await pool.query('SELECT id, email, role FROM users WHERE id = $1', [userId])
-    : await pool.query('SELECT id, email, role FROM users WHERE email = $1', [customerEmail]);
-  const customer = customerResult.rows[0];
-  if (!customer || customer.role !== 'customer') {
-    throw new LicenseError('CUSTOMER_NOT_FOUND', 'An existing customer account is required.', 404);
-  }
-  userId = customer.id;
-  customerEmail = customer.email;
-
   // Retry a handful of times in the astronomically unlikely event of a
   // hash collision on the unique columns.
   const MAX_ATTEMPTS = 5;
@@ -202,32 +187,39 @@ function buildActivationResult(license) {
   };
 }
 
-/** Read-only status lookup — customers may access only their own licenses; admins may access any license. */
-async function getLicenseStatus(licenseId, user) {
-  const ownershipClause = user && user.role === 'admin' ? '' : 'AND l.user_id = $2';
-  const queryParams = user && user.role === 'admin' ? [licenseId] : [licenseId, user && user.sub];
+/** Read-only status lookup — no key required, used by customer account pages via a customer's own license id. */
+async function getLicenseStatus(licenseId) {
   const { rows } = await pool.query(
     `SELECT l.id, l.status, l.installation_id, l.activated_at, l.last_verified_at, l.revoked_at,
             p.name AS product_name, p.slug AS product_slug
      FROM licenses l JOIN products p ON p.id = l.product_id
-     WHERE l.id = $1 ${ownershipClause}`,
-    queryParams
+     WHERE l.id = $1`,
+    [licenseId]
   );
   return rows[0] || null;
 }
 
-/** Lists licenses visible to the authenticated customer or admin. */
-async function listLicensesForUser(user) {
-  const isAdmin = user && user.role === 'admin';
-  const ownershipClause = isAdmin ? '' : 'WHERE l.user_id = $1';
-  const queryParams = isAdmin ? [] : [user && user.sub];
+/**
+ * Customer: list the licenses that belong to them — matched either by
+ * user_id (if the admin linked the license to their account id) or by
+ * customer_email (the email the admin manually typed in when creating
+ * the license, e.g. before the customer ever registered). This is how
+ * a manually-issued key becomes visible in "My Account" once the
+ * customer logs in with the same email.
+ *
+ * Never returns license_key_hash / license_key_lookup — the plaintext
+ * key was already shown once at creation time and is not recoverable.
+ */
+async function getLicensesForCustomer({ userId, email }) {
   const { rows } = await pool.query(
-    `SELECT l.id, l.status, l.installation_id, l.activated_at, l.last_verified_at, l.revoked_at,
+    `SELECT l.id, l.status, l.installation_id, l.activated_at, l.last_verified_at,
+            l.revoked_at, l.created_at,
             p.name AS product_name, p.slug AS product_slug
-     FROM licenses l JOIN products p ON p.id = l.product_id
-     ${ownershipClause}
+     FROM licenses l
+     JOIN products p ON p.id = l.product_id
+     WHERE l.user_id = $1 OR l.customer_email = $2
      ORDER BY l.created_at DESC`,
-    queryParams
+    [userId || null, email]
   );
   return rows;
 }
@@ -280,7 +272,7 @@ module.exports = {
   activateLicense,
   verifyLicense,
   getLicenseStatus,
-  listLicensesForUser,
+  getLicensesForCustomer,
   resetActivation,
   revokeLicense,
   reactivateLicense,
