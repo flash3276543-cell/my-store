@@ -17,5 +17,8 @@ router.use('/admin/licenses', adminLicenseRoutes);
 router.use('/admin/products', adminProductRoutes);
 router.use('/admin/customers', adminCustomerRoutes);
 router.use('/products', productRoutes);
+const { publicRouter: settingsRoutes, adminRouter: adminSettingsRoutes } = require('./settings');
 
+router.use('/settings', settingsRoutes);
+router.use('/admin/settings', adminSettingsRoutes);
 module.exports = router;
