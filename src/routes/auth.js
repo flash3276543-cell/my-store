@@ -7,8 +7,6 @@ const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
-router.get('/me', requireAuth, authController.profile);
-
 router.post(
   '/admin/login',
   loginLimiter,
@@ -20,17 +18,22 @@ router.post(
   authController.adminLogin
 );
 
+/** POST /api/auth/register — create a new customer account. */
 router.post(
   '/register',
   loginLimiter,
   [
     body('email').isEmail().withMessage('Valid email is required.'),
-    body('password').isString().isLength({ min: 8 }).withMessage('Password must be at least 8 characters.'),
+    body('password')
+      .isString()
+      .isLength({ min: 8 })
+      .withMessage('Password must be at least 8 characters.'),
   ],
   runValidation,
-  authController.customerRegister
+  authController.register
 );
 
+/** POST /api/auth/login — customer login. */
 router.post(
   '/login',
   loginLimiter,
@@ -39,7 +42,10 @@ router.post(
     body('password').isString().notEmpty().withMessage('Password is required.'),
   ],
   runValidation,
-  authController.customerLogin
+  authController.login
 );
+
+/** GET /api/auth/me — the logged-in user's own profile (customer or admin). */
+router.get('/me', requireAuth, authController.me);
 
 module.exports = router;

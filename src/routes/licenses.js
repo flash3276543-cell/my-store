@@ -7,6 +7,14 @@ const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
+/**
+ * GET /api/licenses/mine — must be declared before the generic
+ * '/:id/status' route below so it isn't swallowed by it (it isn't, since
+ * the path shapes differ, but keeping "mine" first keeps the file
+ * readable: customer-facing routes together, then the generic lookup).
+ */
+router.get('/mine', requireAuth, licenseController.mine);
+
 router.post(
   '/activate',
   licenseLimiter,
@@ -31,11 +39,8 @@ router.post(
   licenseController.verify
 );
 
-router.get('/mine', requireAuth, licenseController.listMine);
-
 router.get(
   '/:id/status',
-  requireAuth,
   [param('id').isUUID().withMessage('Invalid license id.')],
   runValidation,
   licenseController.status
