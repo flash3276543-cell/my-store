@@ -1,5 +1,6 @@
 const authService = require('../services/authService');
-const { signCustomerToken } = require('../middleware/auth');
+const jwt = require('jsonwebtoken');
+const config = require('../config');
 
 async function adminLogin(req, res, next) {
   try {
@@ -38,9 +39,8 @@ async function login(req, res, next) {
 async function register(req, res, next) {
   try {
     const { email, password } = req.body;
-    // تم التعديل إلى createUser ليتوافق مع authService.js
     const user = await authService.createUser({ email, password, role: 'customer' });
-    const token = signCustomerToken(user);
+    const { token } = await authService.login(email, password);
     res
       .cookie('novendigit_session', token, {
         httpOnly: true,
@@ -56,9 +56,17 @@ async function register(req, res, next) {
 
 async function me(req, res, next) {
   try {
-    // تعتمد على req.user الذي يمرر بواسطة middleware التوثيق
-    if (!req.user) return res.status(401).json({ message: 'Unauthenticated' });
-    res.json({ data: req.user });
+    if (req.user) return res.json({ data: req.user });
+    const token = req.cookies?.novendigit_session || (req.headers.authorization && req.headers.authorization.split(' ')[1]);
+    if (!token) return res.status(401).json({ message: 'Unauthenticated' });
+
+    const secret = config.jwtSecret || process.env.JWT_SECRET;
+    try {
+      const payload = jwt.verify(token, secret);
+      return res.json({ data: { id: payload.sub || payload.id, email: payload.email, role: payload.role || 'customer' } });
+    } catch (jwtErr) {
+      return res.status(401).json({ message: 'Invalid or expired token.' });
+    }
   } catch (err) {
     next(err);
   }
