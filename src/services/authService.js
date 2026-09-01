@@ -1,54 +1,69 @@
-const bcrypt = require('bcrypt');
-const pool = require('../database/pool');
-const { signAdminToken, signCustomerToken } = require('../middleware/auth');
+const authService = require('../services/authService');
+const jwt = require('jsonwebtoken');
+const config = require('../config');
 
-const SALT_ROUNDS = 12;
-
-class AuthError extends Error {
-  constructor(code, message, httpStatus = 401) {
-    super(message);
-    this.code = code;
-    this.httpStatus = httpStatus;
+async function adminLogin(req, res, next) {
+  try {
+    const { email, password } = req.body;
+    const { token, user } = await authService.login(email, password, { requireRole: 'admin' });
+    res
+      .cookie('novendigit_session', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 12 * 60 * 60 * 1000,
+      })
+      .json({ data: { token, user } });
+  } catch (err) {
+    next(err);
   }
 }
 
-async function hashPassword(plain) {
-  return bcrypt.hash(plain, SALT_ROUNDS);
-}
-
-async function findUserByEmail(email) {
-  const { rows } = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-  return rows[0] || null;
-}
-
-/** Generic login used by both admin and customer login routes. */
-async function login(email, password, { requireRole } = {}) {
-  const user = await findUserByEmail(email);
-  // Deliberately generic error message + same code path whether the
-  // email doesn't exist or the password is wrong, to avoid leaking
-  // which emails are registered.
-  if (!user) throw new AuthError('INVALID_CREDENTIALS', 'Invalid email or password.');
-
-  const ok = await bcrypt.compare(password, user.password_hash);
-  if (!ok) throw new AuthError('INVALID_CREDENTIALS', 'Invalid email or password.');
-
-  if (requireRole && user.role !== requireRole) {
-    throw new AuthError('INVALID_CREDENTIALS', 'Invalid email or password.');
+async function login(req, res, next) {
+  try {
+    const { email, password } = req.body;
+    const { token, user } = await authService.login(email, password);
+    res
+      .cookie('novendigit_session', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+      })
+      .json({ data: { token, user } });
+  } catch (err) {
+    next(err);
   }
-
-  const token = user.role === 'admin' ? signAdminToken(user) : signCustomerToken(user);
-  return { token, user: { id: user.id, email: user.email, role: user.role } };
 }
 
-/** Creates a new user record with a hashed password. Used by the admin bootstrap seed and (later) customer registration. */
-async function createUser({ email, password, role = 'customer' }) {
-  const passwordHash = await hashPassword(password);
-  const { rows } = await pool.query(
-    `INSERT INTO users (email, password_hash, role) VALUES ($1, $2, $3)
-     RETURNING id, email, role, created_at`,
-    [email, passwordHash, role]
-  );
-  return rows[0];
+async function register(req, res, next) {
+  try {
+    const { email, password } = req.body;
+    const user = await authService.createUser({ email, password, role: 'customer' });
+    const { token } = await authService.login(email, password);
+    res
+      .cookie('novendigit_session', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+      })
+      .json({ data: { token, user } });
+  } catch (err) {
+    next(err);
+  }
 }
 
-module.exports = { AuthError, login, createUser, findUserByEmail, hashPassword };
+async function me(req, res, next) {
+  try {
+    const token = req.cookies.novendigit_session || (req.headers.authorization && req.headers.authorization.split(' ')[1]);
+    if (!token) return res.status(401).json({ message: 'Unauthenticated' });
+    
+    const payload = jwt.verify(token, config.jwtSecret || process.env.JWT_SECRET);
+    res.json({ data: { id: payload.sub || payload.id, email: payload.email, role: payload.role } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { adminLogin, login, register, me };
