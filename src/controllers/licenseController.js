@@ -4,6 +4,23 @@ function clientMeta(req) {
   return { ipAddress: req.ip, userAgent: req.headers['user-agent'] };
 }
 
+/** GET /api/licenses/mine — جلب مفاتيح الزبون المسجل حالياً */
+async function getMyLicenses(req, res, next) {
+  try {
+    const userId = req.user?.id || req.user?.sub;
+    const customerEmail = req.user?.email;
+
+    if (!userId && !customerEmail) {
+      return res.status(401).json({ error: { message: 'Unauthenticated' } });
+    }
+
+    const licenses = await licenseService.getLicensesForUser({ userId, customerEmail });
+    res.json({ data: licenses });
+  } catch (err) {
+    next(err);
+  }
+}
+
 /** POST /api/licenses/activate */
 async function activate(req, res, next) {
   try {
@@ -36,7 +53,7 @@ async function verify(req, res, next) {
   }
 }
 
-/** GET /api/licenses/:id/status — customer or admin, ownership checked at route level via requireAuth for customers */
+/** GET /api/licenses/:id/status */
 async function status(req, res, next) {
   try {
     const license = await licenseService.getLicenseStatus(req.params.id);
@@ -47,7 +64,7 @@ async function status(req, res, next) {
   }
 }
 
-/** POST /api/admin/licenses — generate a new license manually */
+/** POST /api/admin/licenses */
 async function adminCreate(req, res, next) {
   try {
     const { productId, customerEmail, orderId } = req.body;
@@ -56,8 +73,6 @@ async function adminCreate(req, res, next) {
       customerEmail,
       orderId: orderId || null,
     });
-    // Plaintext key is returned ONLY in this response — admin must copy
-    // it now. It is never retrievable again after this call.
     res.status(201).json({ data: { license, licenseKey: plaintextKey } });
   } catch (err) {
     next(err);
@@ -67,7 +82,7 @@ async function adminCreate(req, res, next) {
 /** POST /api/admin/licenses/:id/reset */
 async function adminReset(req, res, next) {
   try {
-    const license = await licenseService.resetActivation(req.params.id, req.user.sub);
+    const license = await licenseService.resetActivation(req.params.id, req.user?.sub || req.user?.id);
     res.json({ data: license });
   } catch (err) {
     next(err);
@@ -77,7 +92,7 @@ async function adminReset(req, res, next) {
 /** POST /api/admin/licenses/:id/revoke */
 async function adminRevoke(req, res, next) {
   try {
-    const license = await licenseService.revokeLicense(req.params.id, req.user.sub);
+    const license = await licenseService.revokeLicense(req.params.id, req.user?.sub || req.user?.id);
     res.json({ data: license });
   } catch (err) {
     next(err);
@@ -87,11 +102,20 @@ async function adminRevoke(req, res, next) {
 /** POST /api/admin/licenses/:id/reactivate */
 async function adminReactivate(req, res, next) {
   try {
-    const license = await licenseService.reactivateLicense(req.params.id, req.user.sub);
+    const license = await licenseService.reactivateLicense(req.params.id, req.user?.sub || req.user?.id);
     res.json({ data: license });
   } catch (err) {
     next(err);
   }
 }
 
-module.exports = { activate, verify, status, adminCreate, adminReset, adminRevoke, adminReactivate };
+module.exports = {
+  getMyLicenses,
+  activate,
+  verify,
+  status,
+  adminCreate,
+  adminReset,
+  adminRevoke,
+  adminReactivate,
+};
