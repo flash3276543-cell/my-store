@@ -71,5 +71,16 @@ async function me(req, res, next) {
     next(err);
   }
 }
+// أضيفي هذه الدالة في الأسفل
+async function logout(req, res) {
+  res.clearCookie('novendigit_session', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+  });
+  return res.json({ message: 'Logged out successfully' });
+}
 
+// أضيفي logout داخل module.exports
+module.exports = { adminLogin, login, register, logout, me };
 module.exports = { adminLogin, login, register, me };
