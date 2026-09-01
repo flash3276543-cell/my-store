@@ -1,4 +1,5 @@
 const authService = require('../services/authService');
+const { signCustomerToken } = require('../middleware/auth');
 
 async function adminLogin(req, res, next) {
   try {
@@ -37,8 +38,9 @@ async function login(req, res, next) {
 async function register(req, res, next) {
   try {
     const { email, password } = req.body;
-    const user = await authService.register(email, password);
-    const { token } = await authService.login(email, password);
+    // تم التعديل إلى createUser ليتوافق مع authService.js
+    const user = await authService.createUser({ email, password, role: 'customer' });
+    const token = signCustomerToken(user);
     res
       .cookie('novendigit_session', token, {
         httpOnly: true,
@@ -54,10 +56,9 @@ async function register(req, res, next) {
 
 async function me(req, res, next) {
   try {
-    const token = req.cookies.novendigit_session || (req.headers.authorization && req.headers.authorization.split(' ')[1]);
-    if (!token) return res.status(401).json({ message: 'Unauthenticated' });
-    const user = await authService.verifyToken(token);
-    res.json({ data: user });
+    // تعتمد على req.user الذي يمرر بواسطة middleware التوثيق
+    if (!req.user) return res.status(401).json({ message: 'Unauthenticated' });
+    res.json({ data: req.user });
   } catch (err) {
     next(err);
   }
