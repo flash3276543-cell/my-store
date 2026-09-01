@@ -47,25 +47,6 @@ async function status(req, res, next) {
   }
 }
 
-/**
- * GET /api/licenses/mine — the logged-in customer's own licenses.
- * Matches by their account id AND by their account email, so a key an
- * admin created and manually linked to the customer's email (before or
- * after they registered) shows up here automatically. Requires
- * requireAuth at the route level; never exposes the key itself.
- */
-async function mine(req, res, next) {
-  try {
-    const licenses = await licenseService.getLicensesForCustomer({
-      userId: req.user.sub,
-      email: req.user.email,
-    });
-    res.json({ data: licenses });
-  } catch (err) {
-    next(err);
-  }
-}
-
 /** POST /api/admin/licenses — generate a new license manually */
 async function adminCreate(req, res, next) {
   try {
@@ -113,4 +94,4 @@ async function adminReactivate(req, res, next) {
   }
 }
 
-module.exports = { activate, verify, status, mine, adminCreate, adminReset, adminRevoke, adminReactivate };
+module.exports = { activate, verify, status, adminCreate, adminReset, adminRevoke, adminReactivate };
