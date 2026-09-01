@@ -1,9 +1,4 @@
-// Storefront settings (theme + contact) now live on the server via
-// GET /api/settings, not localStorage — that's what makes them consistent
-// across every visitor's device (desktop, phone, tablet), not just the one
-// browser an admin happened to change them from. Because this now needs a
-// network round trip, there's a brief moment on first paint before the
-// theme is applied — see loadStoreSettings(), called first thing in boot().
+// Storefront settings (theme + contact) live on the server via GET /api/settings
 const SETTINGS_DEFAULTS = { theme: '', contactEmail: 'namire345729@gmail.com', contactInstagram: 'https://instagram.com/novendigit' };
 let storeSettings = { ...SETTINGS_DEFAULTS };
 
@@ -34,8 +29,11 @@ async function loadStoreSettings() {
   } catch (error) {
     storeSettings = { ...SETTINGS_DEFAULTS };
   }
-  if (storeSettings.theme) document.documentElement.setAttribute('data-theme', storeSettings.theme);
-  else document.documentElement.removeAttribute('data-theme');
+  if (storeSettings && storeSettings.theme) {
+    document.documentElement.setAttribute('data-theme', storeSettings.theme);
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
   applyContactLinks();
 }
 
@@ -47,6 +45,7 @@ function applyContactLinks() {
 }
 
 function setStatus(element, message, type = '') {
+  if (!element) return;
   element.textContent = message;
   element.className = `status ${type}`;
   if (type === 'error') {
@@ -56,6 +55,7 @@ function setStatus(element, message, type = '') {
 }
 
 function setButtonBusy(button, busy, idleLabel, busyLabel) {
+  if (!button) return;
   button.disabled = busy;
   button.classList.toggle('is-loading', busy);
   button.textContent = busy ? busyLabel : idleLabel;
@@ -68,8 +68,10 @@ async function api(path, options = {}) {
     headers: { 'content-type': 'application/json', ...(options.headers || {}) },
   });
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.error?.message || 'Something went wrong.');
-  return body.data;
+  if (!response.ok) {
+    throw new Error(body.error?.message || body.message || 'خطأ في عملية الاتصال بالسيرفر.');
+  }
+  return body.data !== undefined ? body.data : body;
 }
 
 function escapeAttribute(value) {
@@ -86,7 +88,7 @@ function productCard(product) {
     ${imageMarkup(product.image_url, product.name)}
     <div class="product-card-body">
       <h3>${escapeAttribute(product.name)}</h3>
-      <span class="product-price">${escapeAttribute(product.currency)} ${Number(product.price_cents / 100).toFixed(2)}</span>
+      <span class="product-price">${escapeAttribute(product.currency || 'USD')} ${Number((product.price_cents || 0) / 100).toFixed(2)}</span>
     </div>
   </article>`;
 }
@@ -94,7 +96,8 @@ function productCard(product) {
 async function loadProducts() {
   setStatus(storeStatus, 'Loading products...');
   try {
-    state.products = await api('/api/products');
+    const data = await api('/api/products');
+    state.products = Array.isArray(data) ? data : (data.products || []);
     productGrid.innerHTML = state.products.length ? state.products.map(productCard).join('') : '<p class="empty">No products are available right now.</p>';
     setStatus(storeStatus, `${state.products.length} available product${state.products.length === 1 ? '' : 's'}`);
   } catch (error) {
@@ -119,8 +122,8 @@ function renderSheet(product) {
     ${imageMarkup(product.image_url, product.name, 'sheet-media')}
     <h2 id="sheetTitle">${escapeAttribute(product.name)}</h2>
     <div class="sheet-meta">
-      <span>v${escapeAttribute(product.version)}</span>
-      <span class="product-price">${escapeAttribute(product.currency)} ${Number(product.price_cents / 100).toFixed(2)}</span>
+      <span>v${escapeAttribute(product.version || '1.0')}</span>
+      <span class="product-price">${escapeAttribute(product.currency || 'USD')} ${Number((product.price_cents || 0) / 100).toFixed(2)}</span>
     </div>
     <button id="requestCodeButton" class="button sheet-cta" type="button">طلب كود التفعيل</button>
     <div id="sheetContactSlot"></div>
@@ -157,13 +160,15 @@ function closeSheet() {
   if (window.location.hash.startsWith('#product/')) window.location.hash = '#products';
 }
 
-productGrid.addEventListener('click', (event) => {
-  const card = event.target.closest('.product-card');
-  if (!card) return;
-  window.location.hash = `#product/${encodeURIComponent(card.dataset.slug)}`;
-});
-sheetClose.addEventListener('click', closeSheet);
-sheetBackdrop.addEventListener('click', closeSheet);
+if (productGrid) {
+  productGrid.addEventListener('click', (event) => {
+    const card = event.target.closest('.product-card');
+    if (!card) return;
+    window.location.hash = `#product/${encodeURIComponent(card.dataset.slug)}`;
+  });
+}
+if (sheetClose) sheetClose.addEventListener('click', closeSheet);
+if (sheetBackdrop) sheetBackdrop.addEventListener('click', closeSheet);
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && !sheet.hidden) closeSheet();
 });
@@ -177,16 +182,18 @@ function setActiveNav(name) {
 }
 
 function showView(name) {
-  Object.values(views).forEach((view) => view.classList.add('hidden'));
+  Object.values(views).forEach((view) => view && view.classList.add('hidden'));
   const view = views[name] || views.store;
-  view.classList.remove('hidden');
-  setActiveNav(name === 'store' ? 'products' : name);
-  if (name === 'login' || name === 'register' || name === 'account') {
-    view.classList.remove('view-enter');
-    requestAnimationFrame(() => {
-      view.classList.add('view-enter');
-      view.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
+  if (view) {
+    view.classList.remove('hidden');
+    setActiveNav(name === 'store' ? 'products' : name);
+    if (name === 'login' || name === 'register' || name === 'account') {
+      view.classList.remove('view-enter');
+      requestAnimationFrame(() => {
+        view.classList.add('view-enter');
+        view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
   }
 }
 
@@ -227,51 +234,67 @@ async function loadAccount() {
   setStatus(licenseStatus, 'Loading your licenses...');
   try {
     const user = await api('/api/auth/me');
-    if (!user || !user.email) throw new Error('Not authenticated.');
-    state.user = user;
-    accountEmail.textContent = state.user.email;
-    const licenses = await api('/api/licenses/mine');
-    licenseList.innerHTML = licenses.length
-      ? licenses.map((license) => `<article class="license-card glass"><div><h3>${escapeAttribute(license.product_name)}</h3><p>${escapeAttribute(license.product_slug)}</p></div><span class="license-state license-state-${escapeAttribute(license.status)}">${formatLicenseStatus(license.status)}</span></article>`).join('')
-      : '<p class="empty">You don\u2019t have any licenses yet. Once a product is activated for your account, its key will appear here.</p>';
+    if (!user || (!user.email && !user.user?.email)) throw new Error('Not authenticated.');
+    state.user = user.email ? user : user.user;
+    if (accountEmail) accountEmail.textContent = state.user.email;
+    
+    const resLicenses = await api('/api/licenses/mine');
+    const licenses = Array.isArray(resLicenses) ? resLicenses : (resLicenses.licenses || []);
+    if (licenseList) {
+      licenseList.innerHTML = licenses.length
+        ? licenses.map((license) => `<article class="license-card glass"><div><h3>${escapeAttribute(license.product_name)}</h3><p>${escapeAttribute(license.product_slug)}</p></div><span class="license-state license-state-${escapeAttribute(license.status)}">${formatLicenseStatus(license.status)}</span></article>`).join('')
+        : '<p class="empty">You don’t have any licenses yet. Once a product is activated for your account, its key will appear here.</p>';
+    }
     setStatus(licenseStatus, licenses.length ? `${licenses.length} license${licenses.length === 1 ? '' : 's'} on file` : '');
   } catch (error) {
     state.user = null;
-    accountEmail.textContent = '';
-    licenseList.innerHTML = '';
+    if (accountEmail) accountEmail.textContent = '';
+    if (licenseList) licenseList.innerHTML = '';
     setStatus(licenseStatus, 'Your session has expired. Please log in again.', 'error');
     forgetGateUnlocked();
     openGate();
   }
 }
 
-document.querySelector('#loginForm').addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const status = document.querySelector('#loginStatus');
-  setButtonBusy(loginSubmit, true, 'Log in', 'Logging in');
-  setStatus(status, 'Logging in...');
-  try {
-    await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: document.querySelector('#loginEmail').value, password: document.querySelector('#loginPassword').value }) });
-    window.location.hash = '#account';
-  } catch (error) {
-    setStatus(status, error.message, 'error');
-    setButtonBusy(loginSubmit, false, 'Log in', 'Logging in');
-  }
-});
+const loginForm = document.querySelector('#loginForm');
+if (loginForm) {
+  loginForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const status = document.querySelector('#loginStatus');
+    setButtonBusy(loginSubmit, true, 'Log in', 'Logging in');
+    setStatus(status, 'Logging in...');
+    try {
+      await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: document.querySelector('#loginEmail').value, password: document.querySelector('#loginPassword').value }) });
+      rememberGateUnlocked();
+      closeGate();
+      window.location.hash = '#account';
+      await route();
+    } catch (error) {
+      setStatus(status, error.message, 'error');
+      setButtonBusy(loginSubmit, false, 'Log in', 'Logging in');
+    }
+  });
+}
 
-document.querySelector('#registerForm').addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const status = document.querySelector('#registerStatus');
-  setButtonBusy(registerSubmit, true, 'Create account', 'Creating account');
-  setStatus(status, 'Creating account...');
-  try {
-    await api('/api/auth/register', { method: 'POST', body: JSON.stringify({ email: document.querySelector('#registerEmail').value, password: document.querySelector('#registerPassword').value }) });
-    window.location.hash = '#account';
-  } catch (error) {
-    setStatus(status, error.message, 'error');
-    setButtonBusy(registerSubmit, false, 'Create account', 'Creating account');
-  }
-});
+const registerForm = document.querySelector('#registerForm');
+if (registerForm) {
+  registerForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const status = document.querySelector('#registerStatus');
+    setButtonBusy(registerSubmit, true, 'Create account', 'Creating account');
+    setStatus(status, 'Creating account...');
+    try {
+      await api('/api/auth/register', { method: 'POST', body: JSON.stringify({ email: document.querySelector('#registerEmail').value, password: document.querySelector('#registerPassword').value }) });
+      rememberGateUnlocked();
+      closeGate();
+      window.location.hash = '#account';
+      await route();
+    } catch (error) {
+      setStatus(status, error.message, 'error');
+      setButtonBusy(registerSubmit, false, 'Create account', 'Creating account');
+    }
+  });
+}
 
 document.querySelectorAll('.auth-trigger').forEach((trigger) => {
   trigger.addEventListener('click', (event) => {
@@ -282,16 +305,7 @@ document.querySelectorAll('.auth-trigger').forEach((trigger) => {
 
 window.addEventListener('hashchange', route);
 
-// --- Welcome gate: the store can't be browsed until the visitor is signed in
-//
-// IMPORTANT: this gate deliberately does NOT trust a background call to
-// /api/auth/me to decide whether to unlock the store. Some backends return
-// a "successful" (200) response for anonymous/guest visitors too, which
-// would silently open the store for everyone. Instead, the gate only opens
-// as the direct result of a login/register form being submitted
-// successfully right here, right now. The unlocked state is remembered in
-// sessionStorage so the visitor isn't asked again on every reload within
-// the same browser tab, but a brand new tab/visit always starts locked.
+// --- Welcome gate logic ----------------------------------------------------
 
 const GATE_SESSION_KEY = 'nd-gate-unlocked';
 
@@ -306,18 +320,13 @@ function isGateUnlockedThisSession() {
 function rememberGateUnlocked() {
   try {
     sessionStorage.setItem(GATE_SESSION_KEY, '1');
-  } catch (error) {
-    // Private-browsing modes can block sessionStorage; the gate will simply
-    // re-appear on the next reload, which is safe (fails closed, not open).
-  }
+  } catch (error) {}
 }
 
 function forgetGateUnlocked() {
   try {
     sessionStorage.removeItem(GATE_SESSION_KEY);
-  } catch (error) {
-    // no-op
-  }
+  } catch (error) {}
 }
 
 const welcomeBackdrop = document.querySelector('#welcomeBackdrop');
@@ -329,8 +338,8 @@ const gateRegisterSubmit = document.querySelector('#gateRegisterSubmit');
 
 function setGateTab(name) {
   document.querySelectorAll('.welcome-tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.gateTab === name));
-  gateLoginForm.classList.toggle('hidden', name !== 'login');
-  gateRegisterForm.classList.toggle('hidden', name !== 'register');
+  if (gateLoginForm) gateLoginForm.classList.toggle('hidden', name !== 'login');
+  if (gateRegisterForm) gateRegisterForm.classList.toggle('hidden', name !== 'register');
 }
 
 document.querySelectorAll('.welcome-tab').forEach((tab) => {
@@ -340,19 +349,23 @@ document.querySelectorAll('.welcome-tab').forEach((tab) => {
 function openGate() {
   forgetGateUnlocked();
   document.body.classList.add('gate-active');
-  appShell.setAttribute('inert', '');
-  appShell.setAttribute('aria-hidden', 'true');
-  welcomeBackdrop.hidden = false;
-  welcomeModal.classList.remove('hidden');
+  if (appShell) {
+    appShell.setAttribute('inert', '');
+    appShell.setAttribute('aria-hidden', 'true');
+  }
+  if (welcomeBackdrop) welcomeBackdrop.hidden = false;
+  if (welcomeModal) welcomeModal.classList.remove('hidden');
 }
 
 function closeGate() {
   rememberGateUnlocked();
   document.body.classList.remove('gate-active');
-  appShell.removeAttribute('inert');
-  appShell.removeAttribute('aria-hidden');
-  welcomeBackdrop.hidden = true;
-  welcomeModal.classList.add('hidden');
+  if (appShell) {
+    appShell.removeAttribute('inert');
+    appShell.removeAttribute('aria-hidden');
+  }
+  if (welcomeBackdrop) welcomeBackdrop.hidden = true;
+  if (welcomeModal) welcomeModal.classList.add('hidden');
 }
 
 async function onGateSuccess() {
@@ -361,35 +374,51 @@ async function onGateSuccess() {
   await route();
 }
 
-gateLoginForm.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const status = document.querySelector('#gateLoginStatus');
-  setButtonBusy(gateLoginSubmit, true, 'Log in', 'Logging in');
-  setStatus(status, 'Logging in...');
-  try {
-    await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: document.querySelector('#gateLoginEmail').value, password: document.querySelector('#gateLoginPassword').value }) });
-    await onGateSuccess();
-  } catch (error) {
-    setStatus(status, error.message, 'error');
-  } finally {
-    setButtonBusy(gateLoginSubmit, false, 'Log in', 'Logging in');
-  }
-});
+if (gateLoginForm) {
+  gateLoginForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const status = document.querySelector('#gateLoginStatus');
+    setButtonBusy(gateLoginSubmit, true, 'Log in', 'Logging in');
+    setStatus(status, 'Logging in...');
+    try {
+      await api('/api/auth/login', { 
+        method: 'POST', 
+        body: JSON.stringify({ 
+          email: document.querySelector('#gateLoginEmail').value, 
+          password: document.querySelector('#gateLoginPassword').value 
+        }) 
+      });
+      await onGateSuccess();
+    } catch (error) {
+      setStatus(status, error.message, 'error');
+    } finally {
+      setButtonBusy(gateLoginSubmit, false, 'Log in', 'Logging in');
+    }
+  });
+}
 
-gateRegisterForm.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const status = document.querySelector('#gateRegisterStatus');
-  setButtonBusy(gateRegisterSubmit, true, 'Create account', 'Creating account');
-  setStatus(status, 'Creating account...');
-  try {
-    await api('/api/auth/register', { method: 'POST', body: JSON.stringify({ email: document.querySelector('#gateRegisterEmail').value, password: document.querySelector('#gateRegisterPassword').value }) });
-    await onGateSuccess();
-  } catch (error) {
-    setStatus(status, error.message, 'error');
-  } finally {
-    setButtonBusy(gateRegisterSubmit, false, 'Create account', 'Creating account');
-  }
-});
+if (gateRegisterForm) {
+  gateRegisterForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const status = document.querySelector('#gateRegisterStatus');
+    setButtonBusy(gateRegisterSubmit, true, 'Create account', 'Creating account');
+    setStatus(status, 'Creating account...');
+    try {
+      await api('/api/auth/register', { 
+        method: 'POST', 
+        body: JSON.stringify({ 
+          email: document.querySelector('#gateRegisterEmail').value, 
+          password: document.querySelector('#gateRegisterPassword').value 
+        }) 
+      });
+      await onGateSuccess();
+    } catch (error) {
+      setStatus(status, error.message, 'error');
+    } finally {
+      setButtonBusy(gateRegisterSubmit, false, 'Create account', 'Creating account');
+    }
+  });
+}
 
 async function boot() {
   await loadStoreSettings();
@@ -401,4 +430,4 @@ async function boot() {
   openGate();
 }
 
-boot();
+document.addEventListener('DOMContentLoaded', boot);
