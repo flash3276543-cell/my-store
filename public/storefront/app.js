@@ -1,4 +1,4 @@
-// Storefront settings (theme + contact) live on the server via GET /api/settings
+// Storefront settings
 const SETTINGS_DEFAULTS = { theme: '', contactEmail: 'namire345729@gmail.com', contactInstagram: 'https://instagram.com/novendigit' };
 let storeSettings = { ...SETTINGS_DEFAULTS };
 
@@ -29,11 +29,8 @@ async function loadStoreSettings() {
   } catch (error) {
     storeSettings = { ...SETTINGS_DEFAULTS };
   }
-  if (storeSettings && storeSettings.theme) {
-    document.documentElement.setAttribute('data-theme', storeSettings.theme);
-  } else {
-    document.documentElement.removeAttribute('data-theme');
-  }
+  if (storeSettings && storeSettings.theme) document.documentElement.setAttribute('data-theme', storeSettings.theme);
+  else document.documentElement.removeAttribute('data-theme');
   applyContactLinks();
 }
 
@@ -68,9 +65,7 @@ async function api(path, options = {}) {
     headers: { 'content-type': 'application/json', ...(options.headers || {}) },
   });
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(body.error?.message || body.message || 'خطأ في عملية الاتصال بالسيرفر.');
-  }
+  if (!response.ok) throw new Error(body.error?.message || body.message || 'Something went wrong.');
   return body.data !== undefined ? body.data : body;
 }
 
@@ -88,7 +83,7 @@ function productCard(product) {
     ${imageMarkup(product.image_url, product.name)}
     <div class="product-card-body">
       <h3>${escapeAttribute(product.name)}</h3>
-      <span class="product-price">${escapeAttribute(product.currency || 'USD')} ${Number((product.price_cents || 0) / 100).toFixed(2)}</span>
+      <span class="product-price">${escapeAttribute(product.currency)} ${Number(product.price_cents / 100).toFixed(2)}</span>
     </div>
   </article>`;
 }
@@ -96,8 +91,8 @@ function productCard(product) {
 async function loadProducts() {
   setStatus(storeStatus, 'Loading products...');
   try {
-    const data = await api('/api/products');
-    state.products = Array.isArray(data) ? data : (data.products || []);
+    const res = await api('/api/products');
+    state.products = Array.isArray(res) ? res : (res.products || []);
     productGrid.innerHTML = state.products.length ? state.products.map(productCard).join('') : '<p class="empty">No products are available right now.</p>';
     setStatus(storeStatus, `${state.products.length} available product${state.products.length === 1 ? '' : 's'}`);
   } catch (error) {
@@ -122,8 +117,8 @@ function renderSheet(product) {
     ${imageMarkup(product.image_url, product.name, 'sheet-media')}
     <h2 id="sheetTitle">${escapeAttribute(product.name)}</h2>
     <div class="sheet-meta">
-      <span>v${escapeAttribute(product.version || '1.0')}</span>
-      <span class="product-price">${escapeAttribute(product.currency || 'USD')} ${Number((product.price_cents || 0) / 100).toFixed(2)}</span>
+      <span>v${escapeAttribute(product.version)}</span>
+      <span class="product-price">${escapeAttribute(product.currency)} ${Number(product.price_cents / 100).toFixed(2)}</span>
     </div>
     <button id="requestCodeButton" class="button sheet-cta" type="button">طلب كود التفعيل</button>
     <div id="sheetContactSlot"></div>
@@ -233,13 +228,13 @@ async function loadAccount() {
   const licenseStatus = document.querySelector('#licenseStatus');
   setStatus(licenseStatus, 'Loading your licenses...');
   try {
-    const user = await api('/api/auth/me');
-    if (!user || (!user.email && !user.user?.email)) throw new Error('Not authenticated.');
-    state.user = user.email ? user : user.user;
+    const res = await api('/api/auth/me');
+    const user = res.user || res;
+    if (!user || !user.email) throw new Error('Not authenticated.');
+    state.user = user;
     if (accountEmail) accountEmail.textContent = state.user.email;
-    
-    const resLicenses = await api('/api/licenses/mine');
-    const licenses = Array.isArray(resLicenses) ? resLicenses : (resLicenses.licenses || []);
+    const lRes = await api('/api/licenses/mine');
+    const licenses = Array.isArray(lRes) ? lRes : (lRes.licenses || []);
     if (licenseList) {
       licenseList.innerHTML = licenses.length
         ? licenses.map((license) => `<article class="license-card glass"><div><h3>${escapeAttribute(license.product_name)}</h3><p>${escapeAttribute(license.product_slug)}</p></div><span class="license-state license-state-${escapeAttribute(license.status)}">${formatLicenseStatus(license.status)}</span></article>`).join('')
@@ -255,55 +250,6 @@ async function loadAccount() {
     openGate();
   }
 }
-
-const loginForm = document.querySelector('#loginForm');
-if (loginForm) {
-  loginForm.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const status = document.querySelector('#loginStatus');
-    setButtonBusy(loginSubmit, true, 'Log in', 'Logging in');
-    setStatus(status, 'Logging in...');
-    try {
-      await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: document.querySelector('#loginEmail').value, password: document.querySelector('#loginPassword').value }) });
-      rememberGateUnlocked();
-      closeGate();
-      window.location.hash = '#account';
-      await route();
-    } catch (error) {
-      setStatus(status, error.message, 'error');
-      setButtonBusy(loginSubmit, false, 'Log in', 'Logging in');
-    }
-  });
-}
-
-const registerForm = document.querySelector('#registerForm');
-if (registerForm) {
-  registerForm.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const status = document.querySelector('#registerStatus');
-    setButtonBusy(registerSubmit, true, 'Create account', 'Creating account');
-    setStatus(status, 'Creating account...');
-    try {
-      await api('/api/auth/register', { method: 'POST', body: JSON.stringify({ email: document.querySelector('#registerEmail').value, password: document.querySelector('#registerPassword').value }) });
-      rememberGateUnlocked();
-      closeGate();
-      window.location.hash = '#account';
-      await route();
-    } catch (error) {
-      setStatus(status, error.message, 'error');
-      setButtonBusy(registerSubmit, false, 'Create account', 'Creating account');
-    }
-  });
-}
-
-document.querySelectorAll('.auth-trigger').forEach((trigger) => {
-  trigger.addEventListener('click', (event) => {
-    event.preventDefault();
-    openView(trigger.dataset.view);
-  });
-});
-
-window.addEventListener('hashchange', route);
 
 // --- Welcome gate logic ----------------------------------------------------
 
@@ -420,8 +366,26 @@ if (gateRegisterForm) {
   });
 }
 
+document.querySelectorAll('.auth-trigger').forEach((trigger) => {
+  trigger.addEventListener('click', (event) => {
+    event.preventDefault();
+    openView(trigger.dataset.view);
+  });
+});
+
+window.addEventListener('hashchange', route);
+
 async function boot() {
   await loadStoreSettings();
+  
+  // التحقق المباشر من الجلسة لمن لا يحتاج لإعادة تسجيل الدخول
+  try {
+    const user = await api('/api/auth/me');
+    if (user && (user.email || user.user?.email)) {
+      rememberGateUnlocked();
+    }
+  } catch (e) {}
+
   if (isGateUnlockedThisSession()) {
     closeGate();
     await route();
@@ -430,4 +394,5 @@ async function boot() {
   openGate();
 }
 
-document.addEventListener('DOMContentLoaded', boot);
+// بدء التشغيل
+boot();
