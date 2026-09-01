@@ -209,7 +209,11 @@ async function route() {
   if (hash === 'register') { showView('register'); return; }
   if (hash === 'account') {
     showView('account');
-    await loadAccount();
+    if (state.user) {
+      await loadAccount();
+    } else {
+      openGate();
+    }
     return;
   }
   showView('store');
@@ -244,9 +248,24 @@ async function loadAccount() {
     try {
       const lRes = await api('/api/licenses/mine');
       const licenses = Array.isArray(lRes) ? lRes : (lRes.data || lRes.licenses || []);
+      
       if (licenseList) {
         licenseList.innerHTML = licenses.length
-          ? licenses.map((license) => `<article class="license-card glass"><div><h3>${escapeAttribute(license.product_name)}</h3><p>${escapeAttribute(license.product_slug)}</p></div><span class="license-state license-state-${escapeAttribute(license.status)}">${formatLicenseStatus(license.status)}</span></article>`).join('')
+          ? licenses.map((license) => {
+              const productName = license.product_name || license.productName || license.product_slug || 'License Key';
+              const keyText = license.license_key || license.key || license.code || 'No Key Displayed';
+              const statusText = formatLicenseStatus(license.status || 'active');
+
+              return `
+                <article class="license-card glass" style="display:flex; justify-content:space-between; align-items:center; padding: 12px 16px; margin-bottom:10px; border-radius:8px; background: rgba(255,255,255,0.05);">
+                  <div>
+                    <h3 style="margin:0 0 4px 0; font-size:1rem;">${escapeAttribute(productName)}</h3>
+                    <code style="background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 4px; font-family: monospace; font-size:0.9rem; color:#4ade80; user-select:all;">${escapeAttribute(keyText)}</code>
+                  </div>
+                  <span class="license-state license-state-${escapeAttribute(license.status)}" style="font-size:0.85rem; padding: 2px 8px; border-radius: 4px;">${escapeAttribute(statusText)}</span>
+                </article>
+              `;
+            }).join('')
           : '<p class="empty">You don’t have any licenses yet.</p>';
       }
       setStatus(licenseStatus, licenses.length ? `${licenses.length} license(s) on file` : '');
@@ -377,13 +396,15 @@ async function boot() {
       state.user = user;
       closeGate();
     } else {
+      state.user = null;
       openGate();
     }
   } catch (e) {
+    state.user = null;
     openGate();
   }
 
-  await route();
+  if (!state.products.length) await loadProducts();
 }
 
 // بدء التشغيل
