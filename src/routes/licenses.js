@@ -3,8 +3,12 @@ const { body, param } = require('express-validator');
 const licenseController = require('../controllers/licenseController');
 const { runValidation } = require('../middleware/validate');
 const { licenseLimiter } = require('../middleware/rateLimit');
+const { requireAuth } = require('../middleware/auth'); // استيراد التحقق من تسجيل الدخول
 
 const router = express.Router();
+
+// جلب مفاتيح الزبون المسجل دخول حالياً
+router.get('/mine', requireAuth, licenseController.getMyLicenses);
 
 router.post(
   '/activate',
