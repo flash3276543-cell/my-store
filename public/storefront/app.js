@@ -237,7 +237,6 @@ async function loadAccount() {
     }
     
     state.user = user;
-    rememberGateUnlocked();
     closeGate();
 
     if (accountEmail) accountEmail.textContent = state.user.email || 'Customer';
@@ -261,34 +260,11 @@ async function loadAccount() {
     if (accountEmail) accountEmail.textContent = '';
     if (licenseList) licenseList.innerHTML = '';
     setStatus(licenseStatus, 'Your session has expired. Please log in again.', 'error');
-    forgetGateUnlocked();
     openGate();
   }
 }
 
 // --- Welcome gate logic ----------------------------------------------------
-
-const GATE_SESSION_KEY = 'nd-gate-unlocked';
-
-function isGateUnlockedThisSession() {
-  try {
-    return sessionStorage.getItem(GATE_SESSION_KEY) === '1';
-  } catch (error) {
-    return false;
-  }
-}
-
-function rememberGateUnlocked() {
-  try {
-    sessionStorage.setItem(GATE_SESSION_KEY, '1');
-  } catch (error) {}
-}
-
-function forgetGateUnlocked() {
-  try {
-    sessionStorage.removeItem(GATE_SESSION_KEY);
-  } catch (error) {}
-}
 
 const welcomeBackdrop = document.querySelector('#welcomeBackdrop');
 const welcomeModal = document.querySelector('#welcomeModal');
@@ -308,7 +284,6 @@ document.querySelectorAll('.welcome-tab').forEach((tab) => {
 });
 
 function openGate() {
-  forgetGateUnlocked();
   document.body.classList.add('gate-active');
   if (appShell) {
     appShell.setAttribute('inert', '');
@@ -319,7 +294,6 @@ function openGate() {
 }
 
 function closeGate() {
-  rememberGateUnlocked();
   document.body.classList.remove('gate-active');
   if (appShell) {
     appShell.removeAttribute('inert');
@@ -390,25 +364,23 @@ document.querySelectorAll('.auth-trigger').forEach((trigger) => {
 
 window.addEventListener('hashchange', route);
 
+// --- Boot System -----------------------------------------------------------
+
 async function boot() {
   await loadStoreSettings();
   
   try {
     const res = await api('/api/auth/me');
     const user = res.data || res.user || res;
+    
     if (user && (user.email || user.id)) {
       state.user = user;
-      rememberGateUnlocked();
       closeGate();
     } else {
       openGate();
     }
   } catch (e) {
-    if (!isGateUnlockedThisSession()) {
-      openGate();
-    } else {
-      closeGate();
-    }
+    openGate();
   }
 
   await route();
