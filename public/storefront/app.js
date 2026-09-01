@@ -228,8 +228,8 @@ async function loadAccount() {
   const licenseStatus = document.querySelector('#licenseStatus');
   setStatus(licenseStatus, 'Loading your licenses...');
   try {
-    // 🔧 تم تعديل المسار من /api/auth/me إلى /api/me
-    const res = await api('/api/me');
+    // 🔧 تم الاستدعاء بالطريقة الصحيحة /api/auth/me
+    const res = await api('/api/auth/me');
     const user = res.user || res;
     if (!user || !user.email) throw new Error('Not authenticated.');
     state.user = user;
@@ -328,8 +328,8 @@ if (gateLoginForm) {
     setButtonBusy(gateLoginSubmit, true, 'Log in', 'Logging in');
     setStatus(status, 'Logging in...');
     try {
-      // 🔧 تم تعديل المسار من /api/auth/login إلى /api/login
-      await api('/api/login', { 
+      // 🔧 تم الاستدعاء بالطريقة الصحيحة /api/auth/login
+      await api('/api/auth/login', { 
         method: 'POST', 
         body: JSON.stringify({ 
           email: document.querySelector('#gateLoginEmail').value, 
@@ -352,8 +352,8 @@ if (gateRegisterForm) {
     setButtonBusy(gateRegisterSubmit, true, 'Create account', 'Creating account');
     setStatus(status, 'Creating account...');
     try {
-      // 🔧 تم تعديل المسار من /api/auth/register إلى /api/register
-      await api('/api/register', { 
+      // 🔧 تم الاستدعاء بالطريقة الصحيحة /api/auth/register
+      await api('/api/auth/register', { 
         method: 'POST', 
         body: JSON.stringify({ 
           email: document.querySelector('#gateRegisterEmail').value, 
@@ -382,8 +382,8 @@ async function boot() {
   await loadStoreSettings();
   
   try {
-    // 🔧 تم تعديل المسار من /api/auth/me إلى /api/me
-    const user = await api('/api/me');
+    // 🔧 تم الاستدعاء بالطريقة الصحيحة /api/auth/me
+    const user = await api('/api/auth/me');
     if (user && (user.email || user.user?.email)) {
       rememberGateUnlocked();
     }
