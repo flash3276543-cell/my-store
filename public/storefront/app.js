@@ -228,7 +228,8 @@ async function loadAccount() {
   const licenseStatus = document.querySelector('#licenseStatus');
   setStatus(licenseStatus, 'Loading your licenses...');
   try {
-    const res = await api('/api/auth/me');
+    // 🔧 تم تعديل المسار من /api/auth/me إلى /api/me
+    const res = await api('/api/me');
     const user = res.user || res;
     if (!user || !user.email) throw new Error('Not authenticated.');
     state.user = user;
@@ -327,7 +328,8 @@ if (gateLoginForm) {
     setButtonBusy(gateLoginSubmit, true, 'Log in', 'Logging in');
     setStatus(status, 'Logging in...');
     try {
-      await api('/api/auth/login', { 
+      // 🔧 تم تعديل المسار من /api/auth/login إلى /api/login
+      await api('/api/login', { 
         method: 'POST', 
         body: JSON.stringify({ 
           email: document.querySelector('#gateLoginEmail').value, 
@@ -350,7 +352,8 @@ if (gateRegisterForm) {
     setButtonBusy(gateRegisterSubmit, true, 'Create account', 'Creating account');
     setStatus(status, 'Creating account...');
     try {
-      await api('/api/auth/register', { 
+      // 🔧 تم تعديل المسار من /api/auth/register إلى /api/register
+      await api('/api/register', { 
         method: 'POST', 
         body: JSON.stringify({ 
           email: document.querySelector('#gateRegisterEmail').value, 
@@ -378,9 +381,9 @@ window.addEventListener('hashchange', route);
 async function boot() {
   await loadStoreSettings();
   
-  // التحقق المباشر من الجلسة لمن لا يحتاج لإعادة تسجيل الدخول
   try {
-    const user = await api('/api/auth/me');
+    // 🔧 تم تعديل المسار من /api/auth/me إلى /api/me
+    const user = await api('/api/me');
     if (user && (user.email || user.user?.email)) {
       rememberGateUnlocked();
     }
