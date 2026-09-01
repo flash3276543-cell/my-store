@@ -3,17 +3,8 @@ const { body, param } = require('express-validator');
 const licenseController = require('../controllers/licenseController');
 const { runValidation } = require('../middleware/validate');
 const { licenseLimiter } = require('../middleware/rateLimit');
-const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
-
-/**
- * GET /api/licenses/mine — must be declared before the generic
- * '/:id/status' route below so it isn't swallowed by it (it isn't, since
- * the path shapes differ, but keeping "mine" first keeps the file
- * readable: customer-facing routes together, then the generic lookup).
- */
-router.get('/mine', requireAuth, licenseController.mine);
 
 router.post(
   '/activate',
