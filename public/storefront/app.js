@@ -1,5 +1,9 @@
 // Storefront settings
-const SETTINGS_DEFAULTS = { theme: '', contactEmail: 'namire345729@gmail.com', contactInstagram: 'https://instagram.com/novendigit' };
+const SETTINGS_DEFAULTS = { 
+  theme: '', 
+  contactEmail: 'namire345729@gmail.com', 
+  contactInstagram: 'https://instagram.com/novendigit' 
+};
 let storeSettings = { ...SETTINGS_DEFAULTS };
 
 const state = { products: [], user: null };
@@ -21,7 +25,7 @@ const sheetBackdrop = document.querySelector('#sheetBackdrop');
 const sheetContent = document.querySelector('#sheetContent');
 const sheetClose = document.querySelector('#sheetClose');
 
-// --- Storefront settings: theme + contact ----------------------------------
+// --- Storefront settings & Dynamic Theme ----------------------------------
 
 async function loadStoreSettings() {
   try {
@@ -29,8 +33,17 @@ async function loadStoreSettings() {
   } catch (error) {
     storeSettings = { ...SETTINGS_DEFAULTS };
   }
-  if (storeSettings && storeSettings.theme) document.documentElement.setAttribute('data-theme', storeSettings.theme);
-  else document.documentElement.removeAttribute('data-theme');
+  
+  if (storeSettings && storeSettings.theme) {
+    document.documentElement.setAttribute('data-theme', storeSettings.theme);
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+
+  if (storeSettings && storeSettings.primaryColor) {
+    document.documentElement.style.setProperty('--primary-color', storeSettings.primaryColor);
+  }
+  
   applyContactLinks();
 }
 
@@ -219,7 +232,7 @@ async function route() {
   if (hash === 'register') { showView('register'); return; }
   if (hash === 'account') {
     showView('account');
-    if (state.user) {
+    if (state.user || localStorage.getItem('novendigit_token')) {
       await loadAccount();
     } else {
       openGate();
@@ -234,6 +247,15 @@ function formatLicenseStatus(status) {
   const labels = { active: 'Active', revoked: 'Revoked', suspended: 'Suspended', pending: 'Pending' };
   if (labels[status]) return labels[status];
   return status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown';
+}
+
+function getStatusBadgeStyle(status) {
+  switch(status) {
+    case 'active': return 'background: rgba(74, 222, 128, 0.15); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.3);';
+    case 'revoked': return 'background: rgba(248, 113, 113, 0.15); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.3);';
+    case 'suspended': return 'background: rgba(251, 146, 60, 0.15); color: #fb923c; border: 1px solid rgba(251, 146, 60, 0.3);';
+    default: return 'background: rgba(255, 255, 255, 0.1); color: #ccc; border: 1px solid rgba(255, 255, 255, 0.2);';
+  }
 }
 
 async function loadAccount() {
@@ -265,14 +287,15 @@ async function loadAccount() {
               const productName = license.product_name || license.productName || license.product_slug || 'License Key';
               const keyText = license.license_key || license.key || license.code || 'No Key Displayed';
               const statusText = formatLicenseStatus(license.status || 'active');
+              const badgeStyle = getStatusBadgeStyle(license.status || 'active');
 
               return `
-                <article class="license-card glass" style="display:flex; justify-content:space-between; align-items:center; padding: 12px 16px; margin-bottom:10px; border-radius:8px; background: rgba(255,255,255,0.05);">
-                  <div>
-                    <h3 style="margin:0 0 4px 0; font-size:1rem;">${escapeAttribute(productName)}</h3>
-                    <code style="background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 4px; font-family: monospace; font-size:0.9rem; color:#4ade80; user-select:all;">${escapeAttribute(keyText)}</code>
+                <article class="license-card glass" style="display:flex; justify-content:space-between; align-items:center; padding: 14px 18px; margin-bottom:12px; border-radius:10px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); backdrop-filter: blur(10px);">
+                  <div style="flex:1; margin-right: 12px;">
+                    <h3 style="margin:0 0 6px 0; font-size:1rem; font-weight:600; color:var(--text-color, #fff);">${escapeAttribute(productName)}</h3>
+                    <code style="background: rgba(0,0,0,0.4); padding: 5px 10px; border-radius: 6px; font-family: monospace; font-size:0.92rem; color:#4ade80; border: 1px solid rgba(74, 222, 128, 0.25); display:inline-block; user-select:all;" title="Click to copy">${escapeAttribute(keyText)}</code>
                   </div>
-                  <span class="license-state license-state-${escapeAttribute(license.status)}" style="font-size:0.85rem; padding: 2px 8px; border-radius: 4px;">${escapeAttribute(statusText)}</span>
+                  <span class="license-state" style="font-size:0.8rem; font-weight:600; padding: 4px 10px; border-radius: 6px; ${badgeStyle}">${escapeAttribute(statusText)}</span>
                 </article>
               `;
             }).join('')
@@ -286,6 +309,7 @@ async function loadAccount() {
 
   } catch (error) {
     state.user = null;
+    localStorage.removeItem('novendigit_token');
     if (accountEmail) accountEmail.textContent = '';
     if (licenseList) licenseList.innerHTML = '';
     setStatus(licenseStatus, 'Your session has expired. Please log in again.', 'error');
@@ -345,13 +369,19 @@ if (gateLoginForm) {
     setButtonBusy(gateLoginSubmit, true, 'Log in', 'Logging in');
     setStatus(status, 'Logging in...');
     try {
-      await api('/api/auth/login', { 
+      const res = await api('/api/auth/login', { 
         method: 'POST', 
         body: JSON.stringify({ 
           email: document.querySelector('#gateLoginEmail').value, 
           password: document.querySelector('#gateLoginPassword').value 
         }) 
       });
+
+      const token = res?.token || res?.data?.token;
+      if (token) {
+        localStorage.setItem('novendigit_token', token);
+      }
+
       await onGateSuccess();
     } catch (error) {
       setStatus(status, error.message, 'error');
@@ -368,13 +398,19 @@ if (gateRegisterForm) {
     setButtonBusy(gateRegisterSubmit, true, 'Create account', 'Creating account');
     setStatus(status, 'Creating account...');
     try {
-      await api('/api/auth/register', { 
+      const res = await api('/api/auth/register', { 
         method: 'POST', 
         body: JSON.stringify({ 
           email: document.querySelector('#gateRegisterEmail').value, 
           password: document.querySelector('#gateRegisterPassword').value 
         }) 
       });
+
+      const token = res?.token || res?.data?.token;
+      if (token) {
+        localStorage.setItem('novendigit_token', token);
+      }
+
       await onGateSuccess();
     } catch (error) {
       setStatus(status, error.message, 'error');
@@ -417,5 +453,4 @@ async function boot() {
   if (!state.products.length) await loadProducts();
 }
 
-// بدء التشغيل
 boot();
