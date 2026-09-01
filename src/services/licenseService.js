@@ -199,6 +199,31 @@ async function getLicenseStatus(licenseId) {
   return rows[0] || null;
 }
 
+/**
+ * Customer: list the licenses that belong to them — matched either by
+ * user_id (if the admin linked the license to their account id) or by
+ * customer_email (the email the admin manually typed in when creating
+ * the license, e.g. before the customer ever registered). This is how
+ * a manually-issued key becomes visible in "My Account" once the
+ * customer logs in with the same email.
+ *
+ * Never returns license_key_hash / license_key_lookup — the plaintext
+ * key was already shown once at creation time and is not recoverable.
+ */
+async function getLicensesForCustomer({ userId, email }) {
+  const { rows } = await pool.query(
+    `SELECT l.id, l.status, l.installation_id, l.activated_at, l.last_verified_at,
+            l.revoked_at, l.created_at,
+            p.name AS product_name, p.slug AS product_slug
+     FROM licenses l
+     JOIN products p ON p.id = l.product_id
+     WHERE l.user_id = $1 OR l.customer_email = $2
+     ORDER BY l.created_at DESC`,
+    [userId || null, email]
+  );
+  return rows;
+}
+
 /** Admin: reset an ACTIVE license back to UNACTIVATED so it can be bound to a new installation. */
 async function resetActivation(licenseId, adminUserId) {
   const { rows } = await pool.query(
@@ -247,6 +272,7 @@ module.exports = {
   activateLicense,
   verifyLicense,
   getLicenseStatus,
+  getLicensesForCustomer,
   resetActivation,
   revokeLicense,
   reactivateLicense,
