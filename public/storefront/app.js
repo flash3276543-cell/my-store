@@ -227,21 +227,35 @@ async function loadAccount() {
   const licenseList = document.querySelector('#licenseList');
   const licenseStatus = document.querySelector('#licenseStatus');
   setStatus(licenseStatus, 'Loading your licenses...');
+
   try {
-    // 🔧 تم الاستدعاء بالطريقة الصحيحة /api/auth/me
     const res = await api('/api/auth/me');
-    const user = res.user || res;
-    if (!user || !user.email) throw new Error('Not authenticated.');
-    state.user = user;
-    if (accountEmail) accountEmail.textContent = state.user.email;
-    const lRes = await api('/api/licenses/mine');
-    const licenses = Array.isArray(lRes) ? lRes : (lRes.licenses || []);
-    if (licenseList) {
-      licenseList.innerHTML = licenses.length
-        ? licenses.map((license) => `<article class="license-card glass"><div><h3>${escapeAttribute(license.product_name)}</h3><p>${escapeAttribute(license.product_slug)}</p></div><span class="license-state license-state-${escapeAttribute(license.status)}">${formatLicenseStatus(license.status)}</span></article>`).join('')
-        : '<p class="empty">You don’t have any licenses yet. Once a product is activated for your account, its key will appear here.</p>';
+    const user = res.data || res.user || res;
+    
+    if (!user || (!user.email && !user.id)) {
+      throw new Error('Not authenticated.');
     }
-    setStatus(licenseStatus, licenses.length ? `${licenses.length} license${licenses.length === 1 ? '' : 's'} on file` : '');
+    
+    state.user = user;
+    rememberGateUnlocked();
+    closeGate();
+
+    if (accountEmail) accountEmail.textContent = state.user.email || 'Customer';
+
+    try {
+      const lRes = await api('/api/licenses/mine');
+      const licenses = Array.isArray(lRes) ? lRes : (lRes.data || lRes.licenses || []);
+      if (licenseList) {
+        licenseList.innerHTML = licenses.length
+          ? licenses.map((license) => `<article class="license-card glass"><div><h3>${escapeAttribute(license.product_name)}</h3><p>${escapeAttribute(license.product_slug)}</p></div><span class="license-state license-state-${escapeAttribute(license.status)}">${formatLicenseStatus(license.status)}</span></article>`).join('')
+          : '<p class="empty">You don’t have any licenses yet.</p>';
+      }
+      setStatus(licenseStatus, licenses.length ? `${licenses.length} license(s) on file` : '');
+    } catch (licErr) {
+      if (licenseList) licenseList.innerHTML = '<p class="empty">No active licenses found.</p>';
+      setStatus(licenseStatus, '');
+    }
+
   } catch (error) {
     state.user = null;
     if (accountEmail) accountEmail.textContent = '';
@@ -328,7 +342,6 @@ if (gateLoginForm) {
     setButtonBusy(gateLoginSubmit, true, 'Log in', 'Logging in');
     setStatus(status, 'Logging in...');
     try {
-      // 🔧 تم الاستدعاء بالطريقة الصحيحة /api/auth/login
       await api('/api/auth/login', { 
         method: 'POST', 
         body: JSON.stringify({ 
@@ -352,7 +365,6 @@ if (gateRegisterForm) {
     setButtonBusy(gateRegisterSubmit, true, 'Create account', 'Creating account');
     setStatus(status, 'Creating account...');
     try {
-      // 🔧 تم الاستدعاء بالطريقة الصحيحة /api/auth/register
       await api('/api/auth/register', { 
         method: 'POST', 
         body: JSON.stringify({ 
@@ -382,19 +394,24 @@ async function boot() {
   await loadStoreSettings();
   
   try {
-    // 🔧 تم الاستدعاء بالطريقة الصحيحة /api/auth/me
-    const user = await api('/api/auth/me');
-    if (user && (user.email || user.user?.email)) {
+    const res = await api('/api/auth/me');
+    const user = res.data || res.user || res;
+    if (user && (user.email || user.id)) {
+      state.user = user;
       rememberGateUnlocked();
+      closeGate();
+    } else {
+      openGate();
     }
-  } catch (e) {}
-
-  if (isGateUnlockedThisSession()) {
-    closeGate();
-    await route();
-    return;
+  } catch (e) {
+    if (!isGateUnlockedThisSession()) {
+      openGate();
+    } else {
+      closeGate();
+    }
   }
-  openGate();
+
+  await route();
 }
 
 // بدء التشغيل
