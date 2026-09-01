@@ -59,10 +59,20 @@ function setButtonBusy(button, busy, idleLabel, busyLabel) {
 }
 
 async function api(path, options = {}) {
+  const token = localStorage.getItem('novendigit_token');
+  const headers = { 
+    'content-type': 'application/json', 
+    ...(options.headers || {}) 
+  };
+  
+  if (token) {
+    headers['authorization'] = `Bearer ${token}`;
+  }
+
   const response = await fetch(path, {
     ...options,
     credentials: 'include',
-    headers: { 'content-type': 'application/json', ...(options.headers || {}) },
+    headers,
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error?.message || body.message || 'Something went wrong.');
