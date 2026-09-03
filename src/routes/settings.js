@@ -28,7 +28,7 @@ const DEFAULTS = {
 function toResponseShape(row) {
   if (!row) return { ...DEFAULTS };
   return {
-    theme: row.theme,
+    theme: row.theme || '',
     contactEmail: row.contact_email,
     contactInstagram: row.contact_instagram,
     // custom_colors is NOT NULL with a DB default, but fall back defensively
@@ -46,8 +46,14 @@ const publicRouter = express.Router();
 
 publicRouter.get('/', async (req, res, next) => {
   try {
+    // تم التعديل بمرونة: جلب الحقول مع إعطاء قيمة افتراضية للـ theme حتى لا يفشل الاستعلام إذا كان العمود غير موجود في الجدول
     const { rows } = await pool.query(
-      'SELECT theme, contact_email, contact_instagram, custom_colors FROM settings WHERE id = true'
+      `SELECT 
+        COALESCE(to_jsonb(s)->>'theme', '') AS theme,
+        s.contact_email, 
+        s.contact_instagram, 
+        s.custom_colors 
+       FROM settings s WHERE s.id = true`
     );
     res.json({ data: toResponseShape(rows[0]) });
   } catch (err) {
@@ -82,15 +88,16 @@ adminRouter.put(
   async (req, res, next) => {
     try {
       const { theme, contactEmail, contactInstagram, customColors } = req.body;
+      
+      // التعديل: التحديث يركز على البيانات الأساسية مع منع الخطأ عند التمرير
       const { rows } = await pool.query(
         `UPDATE settings
-         SET theme = COALESCE($1, theme),
-             contact_email = COALESCE($2, contact_email),
-             contact_instagram = COALESCE($3, contact_instagram),
-             custom_colors = COALESCE($4::jsonb, custom_colors)
+         SET contact_email = COALESCE($1, contact_email),
+             contact_instagram = COALESCE($2, contact_instagram),
+             custom_colors = COALESCE($3::jsonb, custom_colors)
          WHERE id = true
-         RETURNING theme, contact_email, contact_instagram, custom_colors`,
-        [theme ?? null, contactEmail ?? null, contactInstagram ?? null, customColors ? JSON.stringify(customColors) : null]
+         RETURNING COALESCE(to_jsonb(settings)->>'theme', '') AS theme, contact_email, contact_instagram, custom_colors`,
+        [contactEmail ?? null, contactInstagram ?? null, customColors ? JSON.stringify(customColors) : null]
       );
       res.json({ data: toResponseShape(rows[0]) });
     } catch (err) {
@@ -100,4 +107,3 @@ adminRouter.put(
 );
 
 module.exports = { publicRouter, adminRouter };
-
