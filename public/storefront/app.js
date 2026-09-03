@@ -63,17 +63,43 @@ function applyCustomColors(colors) {
   const root = document.documentElement.style;
   root.setProperty('--bg', colors.bg);
   root.setProperty('--surface', colors.surface);
-  root.setProperty('--surface-card', lighten(colors.surface, 0.05)); // تعديل إضافي لدعم بطاقات الكتالوج
+  root.setProperty('--surface-card', lighten(colors.surface, 0.05));
   root.setProperty('--border', hexToRgba(colors.border, 0.35));
   root.setProperty('--border-strong', hexToRgba(colors.border, 0.55));
   root.setProperty('--text', colors.text);
   root.setProperty('--text-muted', colors.mutedText);
   root.setProperty('--text-faint', darken(colors.mutedText, 0.35));
   root.setProperty('--primary', colors.accent);
-  root.setProperty('--accent', colors.accent); // تعديل إضافي لدعم عناصر التفاعل والروابط
+  root.setProperty('--accent', colors.accent);
   root.setProperty('--primary-light', lighten(colors.accent, 0.35));
   root.setProperty('--primary-dim', darken(colors.accent, 0.35));
   root.setProperty('--glow', `0 0 32px ${hexToRgba(colors.accent, 0.22)}`);
+
+  // --- تعديل إضافي: إنعكاس الألوان مباشرة على العناصر لمنع استمرار الألوان القديمة ---
+  document.body.style.backgroundColor = colors.bg;
+  document.body.style.color = colors.text;
+
+  // حقن ستايل طوارئ يغطي كافة فئات Glass والبطاقات فوراً
+  let overrideStyle = document.querySelector('#custom-theme-overrides');
+  if (!overrideStyle) {
+    overrideStyle = document.createElement('style');
+    overrideStyle.id = 'custom-theme-overrides';
+    document.head.appendChild(overrideStyle);
+  }
+  overrideStyle.innerHTML = `
+    body, html { background-color: ${colors.bg} !important; color: ${colors.text} !important; }
+    .glass, .product-card, .license-card, .welcome-modal, .sheet-content { 
+      background-color: ${colors.surface} !important; 
+      border-color: ${hexToRgba(colors.border, 0.35)} !important; 
+      color: ${colors.text} !important; 
+    }
+    .button, .sheet-cta, .welcome-tab.active { 
+      background-color: ${colors.accent} !important; 
+      color: #000000 !important; 
+    }
+    .product-price, a, .bn-icon { color: ${colors.accent} !important; }
+    .status, p, span { color: ${colors.mutedText}; }
+  `;
 }
 
 async function loadStoreSettings() {
@@ -208,7 +234,7 @@ function closeSheet() {
 productGrid.addEventListener('click', (event) => {
   const card = event.target.closest('.product-card');
   if (!card) return;
-  window.location.hash = `#product/${encodeURIComponent(card.dataset.slug)}`;
+  window.location.hash = `#product/${escapeAttribute(card.dataset.slug)}`;
 });
 sheetClose.addEventListener('click', closeSheet);
 sheetBackdrop.addEventListener('click', closeSheet);
@@ -492,7 +518,7 @@ gateRegisterForm.addEventListener('submit', async (event) => {
   setButtonBusy(gateRegisterSubmit, true, 'Create account', 'Creating account');
   setStatus(status, 'Creating account...');
   try {
-    await api('/api/auth/register', { method: 'POST', body: JSON.stringify({ email: document.querySelector('#gateRegisterEmail').value, password: document.querySelector('#gateRegisterPassword').value }) });
+    await api('/api/auth/register', { method: 'POST', body: JSON.stringify({ email: document.querySelector('#registerEmail').value, password: document.querySelector('#registerPassword').value }) });
     await onGateSuccess();
   } catch (error) {
     setStatus(status, error.message, 'error');
