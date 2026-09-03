@@ -59,15 +59,18 @@ const sheetClose = document.querySelector('#sheetClose');
 // --- Storefront settings: custom colors + contact ---------------------------
 
 function applyCustomColors(colors) {
+  if (!colors) return;
   const root = document.documentElement.style;
   root.setProperty('--bg', colors.bg);
   root.setProperty('--surface', colors.surface);
+  root.setProperty('--surface-card', lighten(colors.surface, 0.05)); // تعديل إضافي لدعم بطاقات الكتالوج
   root.setProperty('--border', hexToRgba(colors.border, 0.35));
   root.setProperty('--border-strong', hexToRgba(colors.border, 0.55));
   root.setProperty('--text', colors.text);
   root.setProperty('--text-muted', colors.mutedText);
   root.setProperty('--text-faint', darken(colors.mutedText, 0.35));
   root.setProperty('--primary', colors.accent);
+  root.setProperty('--accent', colors.accent); // تعديل إضافي لدعم عناصر التفاعل والروابط
   root.setProperty('--primary-light', lighten(colors.accent, 0.35));
   root.setProperty('--primary-dim', darken(colors.accent, 0.35));
   root.setProperty('--glow', `0 0 32px ${hexToRgba(colors.accent, 0.22)}`);
@@ -79,7 +82,8 @@ async function loadStoreSettings() {
   } catch (error) {
     storeSettings = { ...SETTINGS_DEFAULTS };
   }
-  applyCustomColors(storeSettings.customColors || SETTINGS_DEFAULTS.customColors);
+  const activeColors = storeSettings.customColors || storeSettings.custom_colors || SETTINGS_DEFAULTS.customColors;
+  applyCustomColors(activeColors);
   applyContactLinks();
 }
 
@@ -365,6 +369,7 @@ document.querySelector('#loginForm').addEventListener('submit', async (event) =>
   setStatus(status, 'Logging in...');
   try {
     await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: document.querySelector('#loginEmail').value, password: document.querySelector('#loginPassword').value }) });
+    await loadStoreSettings(); // إعادة تطبيق الألوان بعد تسجيل الدخول
     window.location.hash = '#account';
   } catch (error) {
     setStatus(status, error.message, 'error');
@@ -379,6 +384,7 @@ document.querySelector('#registerForm').addEventListener('submit', async (event)
   setStatus(status, 'Creating account...');
   try {
     await api('/api/auth/register', { method: 'POST', body: JSON.stringify({ email: document.querySelector('#registerEmail').value, password: document.querySelector('#registerPassword').value }) });
+    await loadStoreSettings(); // إعادة تطبيق الألوان بعد إنشاء الحساب
     window.location.hash = '#account';
   } catch (error) {
     setStatus(status, error.message, 'error');
@@ -396,15 +402,6 @@ document.querySelectorAll('.auth-trigger').forEach((trigger) => {
 window.addEventListener('hashchange', route);
 
 // --- Welcome gate: the store can't be browsed until the visitor is signed in
-//
-// IMPORTANT: this gate deliberately does NOT trust a background call to
-// /api/auth/me to decide whether to unlock the store. Some backends return
-// a "successful" (200) response for anonymous/guest visitors too, which
-// would silently open the store for everyone. Instead, the gate only opens
-// as the direct result of a login/register form being submitted
-// successfully right here, right now. The unlocked state is remembered in
-// sessionStorage so the visitor isn't asked again on every reload within
-// the same browser tab, but a brand new tab/visit always starts locked.
 
 const GATE_SESSION_KEY = 'nd-gate-unlocked';
 
@@ -420,8 +417,7 @@ function rememberGateUnlocked() {
   try {
     sessionStorage.setItem(GATE_SESSION_KEY, '1');
   } catch (error) {
-    // Private-browsing modes can block sessionStorage; the gate will simply
-    // re-appear on the next reload, which is safe (fails closed, not open).
+    // Private-browsing modes can block sessionStorage
   }
 }
 
@@ -469,6 +465,7 @@ function closeGate() {
 }
 
 async function onGateSuccess() {
+  await loadStoreSettings(); // تطبيق الألوان عند فتح البوابة بنجاح
   closeGate();
   if (!window.location.hash || window.location.hash === '#') window.location.hash = '#products';
   await route();
@@ -506,10 +503,6 @@ gateRegisterForm.addEventListener('submit', async (event) => {
 
 async function boot() {
   await loadStoreSettings();
-  // Now that /api/auth/me is backed by a real requireAuth check (401 when
-  // there's no valid session), it's safe to trust it again: a returning,
-  // already-logged-in customer skips the gate immediately instead of
-  // having to log in on every new tab.
   try {
     const user = await api('/api/auth/me');
     if (user && user.email) {
@@ -520,7 +513,7 @@ async function boot() {
       return;
     }
   } catch (error) {
-    // Not authenticated (or the request failed) — fall through below.
+    // Not authenticated
   }
   if (isGateUnlockedThisSession()) {
     closeGate();
