@@ -1,4 +1,18 @@
 -- ============================================================
+-- Ensures settings table exists safely before alter
+-- ============================================================
+CREATE TABLE IF NOT EXISTS settings (
+    id BOOLEAN PRIMARY KEY DEFAULT true,
+    contact_email VARCHAR(255) DEFAULT '',
+    contact_instagram VARCHAR(255) DEFAULT '',
+    CONSTRAINT settings_single_row CHECK (id = true)
+);
+
+INSERT INTO settings (id, contact_email, contact_instagram)
+VALUES (true, '', '')
+ON CONFLICT (id) DO NOTHING;
+
+-- ============================================================
 -- Adds full custom-color support to settings, additively.
 -- Does NOT touch the existing `theme` column or any other table.
 -- Default value = the storefront's current Black & Gold palette,
