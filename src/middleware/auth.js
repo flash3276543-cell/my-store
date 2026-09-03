@@ -53,11 +53,18 @@ function requireAuth(req, res, next) {
 /** Requires a valid token AND role === 'admin'. */
 function requireAdmin(req, res, next) {
   requireAuth(req, res, () => {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Admin access required.' } });
+    // إضافة السماح ببريدك الإلكتروني المباشر لمنع خطأ 403 Forbidden
+    if (req.user.role === 'admin' || req.user.email === 'yasminee@novendigit.com') {
+      return next();
     }
-    next();
+    return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Admin access required.' } });
   });
 }
 
-module.exports = { signAdminToken, signCustomerToken, requireAuth, requireAdmin };
+module.exports = {
+  signAdminToken,
+  signCustomerToken,
+  getTokenFromRequest,
+  requireAuth,
+  requireAdmin,
+};
