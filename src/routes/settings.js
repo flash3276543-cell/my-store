@@ -30,7 +30,7 @@ const DEFAULTS = {
 function toResponseShape(row) {
   if (!row) return { ...DEFAULTS };
   return {
-    theme: row.theme,
+    theme: row.theme || '',
     contactEmail: row.contact_email,
     contactInstagram: row.contact_instagram,
     // custom_colors is NOT NULL with a DB default, but fall back defensively
@@ -51,7 +51,14 @@ const publicRouter = express.Router();
 publicRouter.get('/', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
-      'SELECT theme, contact_email, contact_instagram, custom_colors, ccp_account_holder, ccp_number FROM settings WHERE id = true'
+      `SELECT 
+        COALESCE(to_jsonb(s)->>'theme', '') AS theme,
+        s.contact_email, 
+        s.contact_instagram, 
+        s.custom_colors,
+        s.ccp_account_holder,
+        s.ccp_number
+       FROM settings s WHERE s.id = true`
     );
     res.json({ data: toResponseShape(rows[0]) });
   } catch (err) {
@@ -87,19 +94,18 @@ adminRouter.put(
   runValidation,
   async (req, res, next) => {
     try {
-      const { theme, contactEmail, contactInstagram, customColors, ccpAccountHolder, ccpNumber } = req.body;
+      const { contactEmail, contactInstagram, customColors, ccpAccountHolder, ccpNumber } = req.body;
+      
       const { rows } = await pool.query(
         `UPDATE settings
-         SET theme = COALESCE($1, theme),
-             contact_email = COALESCE($2, contact_email),
-             contact_instagram = COALESCE($3, contact_instagram),
-             custom_colors = COALESCE($4::jsonb, custom_colors),
-             ccp_account_holder = COALESCE($5, ccp_account_holder),
-             ccp_number = COALESCE($6, ccp_number)
+         SET contact_email = COALESCE($1, contact_email),
+             contact_instagram = COALESCE($2, contact_instagram),
+             custom_colors = CASE WHEN $3::jsonb IS NOT NULL THEN $3::jsonb ELSE custom_colors END,
+             ccp_account_holder = COALESCE($4, ccp_account_holder),
+             ccp_number = COALESCE($5, ccp_number)
          WHERE id = true
-         RETURNING theme, contact_email, contact_instagram, custom_colors, ccp_account_holder, ccp_number`,
+         RETURNING COALESCE(to_jsonb(settings)->>'theme', '') AS theme, contact_email, contact_instagram, custom_colors, ccp_account_holder, ccp_number`,
         [
-          theme ?? null,
           contactEmail ?? null,
           contactInstagram ?? null,
           customColors ? JSON.stringify(customColors) : null,
@@ -115,4 +121,3 @@ adminRouter.put(
 );
 
 module.exports = { publicRouter, adminRouter };
-
