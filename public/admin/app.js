@@ -12,15 +12,9 @@ const licenseForm = document.querySelector('#licenseForm');
 const licenseMessage = document.querySelector('#licenseMessage');
 const keyBox = document.querySelector('#keyBox');
 
-// --- Storefront settings (now backed by the server, not localStorage) -----
-// GET /api/settings is public and read by the storefront on every page
-// load; PUT /api/admin/settings is protected by requireAdmin. This is what
-// makes color/contact changes show up on every device, not just the
-// browser where the admin last changed them.
+// --- Storefront settings -----
 const DEFAULT_CONTACT = { email: 'namire345729@gmail.com', instagram: 'https://instagram.com/novendigit' };
 
-// Six user-pickable colors. Keys match exactly what the backend
-// (src/routes/settings.js) validates and stores under customColors.
 const COLOR_FIELDS = [
   { key: 'bg', label: 'Background' },
   { key: 'surface', label: 'Surface' },
@@ -43,6 +37,7 @@ const contactMessage = document.querySelector('#contactMessage');
 const contactPreview = document.querySelector('#contactPreview');
 
 function message(element, text, type = '') {
+  if (!element) return;
   element.textContent = text;
   element.className = `message ${type}`;
 }
@@ -65,7 +60,8 @@ function escapeHtml(value) {
 function setSection(section) {
   document.querySelectorAll('.view').forEach((view) => view.classList.toggle('active', view.id === `${section}Section`));
   document.querySelectorAll('.nav-item').forEach((item) => item.classList.toggle('active', item.dataset.section === section));
-  document.querySelector('#pageTitle').textContent = section[0].toUpperCase() + section.slice(1);
+  const pageTitle = document.querySelector('#pageTitle');
+  if (pageTitle) pageTitle.textContent = section[0].toUpperCase() + section.slice(1);
 }
 
 function productCard(product) {
@@ -74,17 +70,29 @@ function productCard(product) {
 
 function renderProducts() {
   const cards = state.products.map(productCard).join('') || '<p class="empty">No products found.</p>';
-  document.querySelector('#productCards').innerHTML = cards;
-  document.querySelector('#dashboardProducts').innerHTML = state.products.filter((product) => product.is_active).slice(0, 3).map(productCard).join('') || '<p class="empty">No active products.</p>';
-  document.querySelector('#productCount').textContent = state.products.length;
-  document.querySelector('#activeProductCount').textContent = state.products.filter((product) => product.is_active).length;
-  productSelect.innerHTML = '<option value="">Select an active product</option>' + state.products.filter((product) => product.is_active).map((product) => `<option value="${product.id}">${escapeHtml(product.name)} · v${escapeHtml(product.version)}</option>`).join('');
+  const productCardsEl = document.querySelector('#productCards');
+  if (productCardsEl) productCardsEl.innerHTML = cards;
+
+  const dashboardProductsEl = document.querySelector('#dashboardProducts');
+  if (dashboardProductsEl) dashboardProductsEl.innerHTML = state.products.filter((product) => product.is_active).slice(0, 3).map(productCard).join('') || '<p class="empty">No active products.</p>';
+
+  const productCountEl = document.querySelector('#productCount');
+  if (productCountEl) productCountEl.textContent = state.products.length;
+
+  const activeProductCountEl = document.querySelector('#activeProductCount');
+  if (activeProductCountEl) activeProductCountEl.textContent = state.products.filter((product) => product.is_active).length;
+
+  if (productSelect) productSelect.innerHTML = '<option value="">Select an active product</option>' + state.products.filter((product) => product.is_active).map((product) => `<option value="${product.id}">${escapeHtml(product.name)} · v${escapeHtml(product.version)}</option>`).join('');
 }
 
 function renderCustomers() {
-  document.querySelector('#customerCount').textContent = state.customers.length;
-  document.querySelector('#customerRows').innerHTML = state.customers.map((customer) => `<tr><td><strong>${escapeHtml(customer.email)}</strong></td><td>${new Date(customer.created_at).toLocaleDateString()}</td><td>${escapeHtml(customer.product_count)}</td><td>${escapeHtml(customer.license_count)}</td><td>${escapeHtml(customer.order_count)}</td><td><button class="button secondary choose-customer" data-id="${customer.id}">Use customer</button></td></tr>`).join('') || '<tr><td colspan="6">No customers found.</td></tr>';
-  customerSelect.innerHTML = '<option value="">Select a customer</option>' + state.customers.map((customer) => `<option value="${customer.id}" data-email="${escapeHtml(customer.email)}">${escapeHtml(customer.email)}</option>`).join('');
+  const customerCountEl = document.querySelector('#customerCount');
+  if (customerCountEl) customerCountEl.textContent = state.customers.length;
+
+  const customerRowsEl = document.querySelector('#customerRows');
+  if (customerRowsEl) customerRowsEl.innerHTML = state.customers.map((customer) => `<tr><td><strong>${escapeHtml(customer.email)}</strong></td><td>${new Date(customer.created_at).toLocaleDateString()}</td><td>${escapeHtml(customer.product_count)}</td><td>${escapeHtml(customer.license_count)}</td><td>${escapeHtml(customer.order_count)}</td><td><button class="button secondary choose-customer" data-id="${customer.id}">Use customer</button></td></tr>`).join('') || '<tr><td colspan="6">No customers found.</td></tr>';
+
+  if (customerSelect) customerSelect.innerHTML = '<option value="">Select a customer</option>' + state.customers.map((customer) => `<option value="${customer.id}" data-email="${escapeHtml(customer.email)}">${escapeHtml(customer.email)}</option>`).join('');
 }
 
 function capitalize(value) {
@@ -109,10 +117,11 @@ function orderDetailMarkup(order) {
 }
 
 function renderOrders() {
-  document.querySelector('#orderRows').innerHTML = state.orders.map((order) => `<tr><td>${escapeHtml(order.id.slice(0, 8))}</td><td>${escapeHtml(order.customer_email)}</td><td>${escapeHtml(order.product_name)}</td><td>${escapeHtml(order.currency)} ${(order.total_cents / 100).toFixed(2)}</td><td>${escapeHtml(capitalize(order.payment_status))}${order.payment_method ? ` · ${escapeHtml(order.payment_method)}` : ''}</td><td>${escapeHtml(capitalize(order.order_status))}</td><td>${new Date(order.created_at).toLocaleDateString()}</td><td>${orderActionsMarkup(order)}</td></tr>${orderDetailMarkup(order)}`).join('') || '<tr><td colspan="8">No orders found.</td></tr>';
+  const orderRowsEl = document.querySelector('#orderRows');
+  if (orderRowsEl) orderRowsEl.innerHTML = state.orders.map((order) => `<tr><td>${escapeHtml(order.id.slice(0, 8))}</td><td>${escapeHtml(order.customer_email)}</td><td>${escapeHtml(order.product_name)}</td><td>${escapeHtml(order.currency)} ${(order.total_cents / 100).toFixed(2)}</td><td>${escapeHtml(capitalize(order.payment_status))}${order.payment_method ? ` · ${escapeHtml(order.payment_method)}` : ''}</td><td>${escapeHtml(capitalize(order.order_status))}</td><td>${new Date(order.created_at).toLocaleDateString()}</td><td>${orderActionsMarkup(order)}</td></tr>${orderDetailMarkup(order)}`).join('') || '<tr><td colspan="8">No orders found.</td></tr>';
 }
 
-document.querySelector('#orderRows').addEventListener('click', async (event) => {
+document.querySelector('#orderRows')?.addEventListener('click', async (event) => {
   const viewButton = event.target.closest('.view-order');
   if (viewButton) {
     document.querySelector(`[data-order-detail="${viewButton.dataset.id}"]`)?.classList.toggle('hidden');
@@ -130,7 +139,7 @@ document.querySelector('#orderRows').addEventListener('click', async (event) => 
     if (verifyButton) {
       const result = await api(`/api/admin/orders/${orderId}/verify`, { method: 'POST' });
       await loadData();
-      if (result.licenseKey) {
+      if (result.licenseKey && keyBox) {
         keyBox.textContent = result.licenseKey;
         keyBox.classList.remove('hidden');
         showLicenseId(result.license?.id);
@@ -167,10 +176,11 @@ function licenseDetailMarkup(license) {
 }
 
 function renderLicenses() {
-  document.querySelector('#licenseRows').innerHTML = state.licenses.map((license) => `<tr><td>${escapeHtml(license.id.slice(0, 8))}</td><td>${escapeHtml(license.customer_email)}</td><td>${escapeHtml(license.product_name)}</td><td>${license.order_id ? escapeHtml(license.order_id.slice(0, 8)) : '\u2014'}</td><td>${escapeHtml(capitalize(license.status))}</td><td>${license.installation_id ? 'Activated' : 'Not activated'}</td><td>${new Date(license.created_at).toLocaleDateString()}</td><td>No expiration</td><td>${licenseActionsMarkup(license)}</td></tr>${licenseDetailMarkup(license)}`).join('') || '<tr><td colspan="9">No licenses found.</td></tr>';
+  const licenseRowsEl = document.querySelector('#licenseRows');
+  if (licenseRowsEl) licenseRowsEl.innerHTML = state.licenses.map((license) => `<tr><td>${escapeHtml(license.id.slice(0, 8))}</td><td>${escapeHtml(license.customer_email)}</td><td>${escapeHtml(license.product_name)}</td><td>${license.order_id ? escapeHtml(license.order_id.slice(0, 8)) : '\u2014'}</td><td>${escapeHtml(capitalize(license.status))}</td><td>${license.installation_id ? 'Activated' : 'Not activated'}</td><td>${new Date(license.created_at).toLocaleDateString()}</td><td>No expiration</td><td>${licenseActionsMarkup(license)}</td></tr>${licenseDetailMarkup(license)}`).join('') || '<tr><td colspan="9">No licenses found.</td></tr>';
 }
 
-document.querySelector('#licenseRows').addEventListener('click', async (event) => {
+document.querySelector('#licenseRows')?.addEventListener('click', async (event) => {
   const viewButton = event.target.closest('.view-license');
   if (viewButton) {
     document.querySelector(`[data-license-detail="${viewButton.dataset.id}"]`)?.classList.toggle('hidden');
@@ -204,10 +214,6 @@ document.querySelector('#licenseRows').addEventListener('click', async (event) =
   }
 });
 
-// --- Dashboard stats: computed client-side from already-fetched data, no
-// extra endpoint needed. Revenue assumes a single store currency (matches
-// the rest of this project); mixed-currency totals would need real
-// per-currency breakdown, out of scope here.
 function renderDashboardStats() {
   const activeLicenseCount = document.querySelector('#activeLicenseCount');
   const totalOrderCount = document.querySelector('#totalOrderCount');
@@ -245,6 +251,7 @@ async function loadData() {
 }
 
 function openProduct(product = null) {
+  if (!productModal) return;
   productModal.classList.remove('hidden');
   document.querySelector('#modalTitle').textContent = product ? 'Edit product' : 'Add product';
   document.querySelector('#editingProductId').value = product?.id || '';
@@ -259,10 +266,6 @@ function openProduct(product = null) {
   document.querySelector('#productDescription').value = product?.description || '';
 }
 
-// --- Small color-math helpers: <input type="color"> only gives a solid
-// hex value, but the admin's existing CSS uses translucent rgba() for
-// --line (border), so we derive that alpha version from the picked hex
-// instead of asking for a 7th "border opacity" field.
 function hexToRgb(hex) {
   const clean = (hex || '#000000').replace('#', '');
   const full = clean.length === 3 ? clean.split('').map((c) => c + c).join('') : clean;
@@ -281,8 +284,6 @@ function hexToRgba(hex, alpha) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-// --- Storefront custom colors ----------------------------------------------
-
 async function loadSettings() {
   try {
     settingsCache = await api('/api/settings');
@@ -296,6 +297,7 @@ async function loadSettings() {
 }
 
 function renderColorFields() {
+  if (!colorFieldsContainer) return;
   const colors = settingsCache?.customColors || DEFAULT_COLORS;
   colorFieldsContainer.innerHTML = COLOR_FIELDS.map(
     (field) => `
@@ -306,6 +308,7 @@ function renderColorFields() {
 }
 
 function collectColorFieldValues() {
+  if (!colorFieldsContainer) return {};
   const colors = {};
   colorFieldsContainer.querySelectorAll('.color-input').forEach((input) => {
     colors[input.dataset.colorKey] = input.value;
@@ -313,9 +316,6 @@ function collectColorFieldValues() {
   return colors;
 }
 
-// Maps the 6 generic color keys onto the admin panel's OWN CSS variable
-// names (defined in the <style> block of admin/index.html), applying
-// them live so the admin sees the result immediately, on this same page.
 function applyAdminColors(colors) {
   const root = document.documentElement.style;
   root.setProperty('--black', colors.bg);
@@ -339,16 +339,14 @@ async function saveColors() {
   }
 }
 
-colorFieldsContainer.addEventListener('input', (event) => {
-  // Live-preview on the admin panel itself as colors are picked, without
-  // saving yet — saving only happens on the explicit Save Colors click.
+colorFieldsContainer?.addEventListener('input', (event) => {
   if (!event.target.classList.contains('color-input')) return;
   applyAdminColors(collectColorFieldValues());
 });
 
-document.querySelector('#saveColorsButton').addEventListener('click', saveColors);
+document.querySelector('#saveColorsButton')?.addEventListener('click', saveColors);
 
-resetColorsButton.addEventListener('click', async () => {
+resetColorsButton?.addEventListener('click', async () => {
   try {
     settingsCache = await api('/api/admin/settings', { method: 'PUT', body: JSON.stringify({ customColors: DEFAULT_COLORS }) });
     renderColorFields();
@@ -359,21 +357,19 @@ resetColorsButton.addEventListener('click', async () => {
   }
 });
 
-// --- Storefront contact details --------------------------------------------
-
 function renderContactPreview(email) {
-  contactPreview.textContent = `mailto:${email || DEFAULT_CONTACT.email}?subject=طلب مفتاح تفعيل - {product name}`;
+  if (contactPreview) contactPreview.textContent = `mailto:${email || DEFAULT_CONTACT.email}?subject=طلب مفتاح تفعيل - {product name}`;
 }
 
 function loadContactForm() {
-  contactEmail.value = settingsCache?.contactEmail || DEFAULT_CONTACT.email;
-  contactInstagram.value = settingsCache?.contactInstagram || DEFAULT_CONTACT.instagram;
-  renderContactPreview(contactEmail.value);
+  if (contactEmail) contactEmail.value = settingsCache?.contactEmail || DEFAULT_CONTACT.email;
+  if (contactInstagram) contactInstagram.value = settingsCache?.contactInstagram || DEFAULT_CONTACT.instagram;
+  renderContactPreview(contactEmail?.value);
 }
 
-contactEmail.addEventListener('input', () => renderContactPreview(contactEmail.value));
+contactEmail?.addEventListener('input', () => renderContactPreview(contactEmail.value));
 
-contactForm.addEventListener('submit', async (event) => {
+contactForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
   try {
     settingsCache = await api('/api/admin/settings', {
@@ -387,19 +383,17 @@ contactForm.addEventListener('submit', async (event) => {
   }
 });
 
-// --- CCP / postal transfer details -----------------------------------------
-
 const ccpForm = document.querySelector('#ccpForm');
 const ccpAccountHolder = document.querySelector('#ccpAccountHolder');
 const ccpNumber = document.querySelector('#ccpNumber');
 const ccpMessage = document.querySelector('#ccpMessage');
 
 function loadCcpForm() {
-  ccpAccountHolder.value = settingsCache?.ccpAccountHolder || '';
-  ccpNumber.value = settingsCache?.ccpNumber || '';
+  if (ccpAccountHolder) ccpAccountHolder.value = settingsCache?.ccpAccountHolder || '';
+  if (ccpNumber) ccpNumber.value = settingsCache?.ccpNumber || '';
 }
 
-ccpForm.addEventListener('submit', async (event) => {
+ccpForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
   try {
     settingsCache = await api('/api/admin/settings', {
@@ -412,7 +406,7 @@ ccpForm.addEventListener('submit', async (event) => {
   }
 });
 
-loginForm.addEventListener('submit', async (event) => {
+loginForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
   message(loginMessage, 'Signing in...');
   try {
@@ -436,10 +430,10 @@ loginForm.addEventListener('submit', async (event) => {
 
 document.querySelectorAll('.nav-item').forEach((item) => item.addEventListener('click', () => setSection(item.dataset.section)));
 document.querySelectorAll('[data-section-jump]').forEach((item) => item.addEventListener('click', () => setSection(item.dataset.sectionJump)));
-document.querySelector('#addProductButton').addEventListener('click', () => openProduct());
-document.querySelector('#closeModal').addEventListener('click', () => productModal.classList.add('hidden'));
+document.querySelector('#addProductButton')?.addEventListener('click', () => openProduct());
+document.querySelector('#closeModal')?.addEventListener('click', () => productModal?.classList.add('hidden'));
 
-document.querySelector('#productCards').addEventListener('click', async (event) => {
+document.querySelector('#productCards')?.addEventListener('click', async (event) => {
   const id = event.target.dataset.id;
   const product = state.products.find((item) => item.id === id);
   if (event.target.classList.contains('edit-product')) openProduct(product);
@@ -463,7 +457,7 @@ document.querySelector('#productCards').addEventListener('click', async (event) 
   }
 });
 
-productForm.addEventListener('submit', async (event) => {
+productForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
   const id = document.querySelector('#editingProductId').value;
   const filePathValue = document.querySelector('#productFilePath').value.trim();
@@ -477,15 +471,10 @@ productForm.addEventListener('submit', async (event) => {
     shortDescription: document.querySelector('#productShort').value || null,
     description: document.querySelector('#productDescription').value || null,
   };
-  // Only send filePath when the admin actually typed something — an
-  // empty field means "leave the current file alone", per the field's
-  // own placeholder text. Previously this was collected in the form but
-  // never actually included in the request at all, so it silently never
-  // saved; this restores that promised behavior.
   if (filePathValue) payload.filePath = filePathValue;
   try {
     await api(id ? `/api/admin/products/${id}` : '/api/admin/products', { method: id ? 'PATCH' : 'POST', body: JSON.stringify(payload) });
-    productModal.classList.add('hidden');
+    productModal?.classList.add('hidden');
     await loadData();
     message(productMessage, id ? 'Product updated.' : 'Product created.', 'success');
   } catch (error) {
@@ -493,24 +482,26 @@ productForm.addEventListener('submit', async (event) => {
   }
 });
 
-document.querySelector('#customerRows').addEventListener('click', (event) => {
+document.querySelector('#customerRows')?.addEventListener('click', (event) => {
   if (event.target.classList.contains('choose-customer')) {
     setSection('licenses');
-    customerSelect.value = event.target.dataset.id;
+    if (customerSelect) customerSelect.value = event.target.dataset.id;
   }
 });
 
-licenseForm.addEventListener('submit', async (event) => {
+licenseForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
-  keyBox.classList.add('hidden');
+  keyBox?.classList.add('hidden');
   message(licenseMessage, 'Generating...');
-  const customer = customerSelect.selectedOptions[0];
+  const customer = customerSelect?.selectedOptions[0];
   try {
-    const data = await api('/api/admin/licenses', { method: 'POST', body: JSON.stringify({ productId: productSelect.value, userId: customerSelect.value, customerEmail: customer.dataset.email }) });
-    keyBox.textContent = data.licenseKey;
-    keyBox.classList.remove('hidden');
+    const data = await api('/api/admin/licenses', { method: 'POST', body: JSON.stringify({ productId: productSelect.value, userId: customerSelect.value, customerEmail: customer?.dataset.email }) });
+    if (keyBox) {
+      keyBox.textContent = data.licenseKey;
+      keyBox.classList.remove('hidden');
+    }
     showLicenseId(data.license?.id);
-    message(licenseMessage, `License assigned to ${customer.dataset.email}.`, 'success');
+    message(licenseMessage, `License assigned to ${customer?.dataset.email}.`, 'success');
   } catch (error) {
     message(licenseMessage, error.message, 'error');
   }
@@ -518,6 +509,7 @@ licenseForm.addEventListener('submit', async (event) => {
 
 function showLicenseId(licenseId) {
   const licenseIdNote = document.querySelector('#keyBoxLicenseId');
+  if (!licenseIdNote) return;
   if (!licenseId) {
     licenseIdNote.classList.add('hidden');
     return;
@@ -526,9 +518,7 @@ function showLicenseId(licenseId) {
   licenseIdNote.classList.remove('hidden');
 }
 
-// --- Reset Device -----------------------------------------------------------
-// Uses the existing, unmodified POST /api/admin/licenses/:id/reset endpoint.
-document.querySelector('#resetDeviceForm').addEventListener('submit', async (event) => {
+document.querySelector('#resetDeviceForm')?.addEventListener('submit', async (event) => {
   event.preventDefault();
   const resetDeviceMessage = document.querySelector('#resetDeviceMessage');
   const licenseId = document.querySelector('#resetLicenseId').value.trim();
@@ -541,13 +531,10 @@ document.querySelector('#resetDeviceForm').addEventListener('submit', async (eve
   }
 });
 
-document.querySelector('#logoutButton').addEventListener('click', async () => {
+document.querySelector('#logoutButton')?.addEventListener('click', async () => {
   try {
     await api('/api/auth/logout', { method: 'POST' });
-  } catch (error) {
-    // Even if the request fails (e.g. offline), still hide the admin UI —
-    // the cookie will simply expire naturally on its own.
-  }
-  appRoot.classList.add('hidden');
-  loginRoot.classList.remove('hidden');
+  } catch (error) {}
+  appRoot?.classList.add('hidden');
+  loginRoot?.classList.remove('hidden');
 });
