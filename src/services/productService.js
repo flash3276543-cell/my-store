@@ -1,6 +1,7 @@
 const pool = require('../database/pool');
 const fs = require('fs/promises');
 const path = require('path');
+const { logActivationEvent } = require('./licenseService');
 
 const publicColumns = 'id, slug, name, short_description, description, price_cents, currency, version, is_active, image_url, created_at, updated_at';
 
@@ -32,13 +33,13 @@ async function getPublicProductBySlug(slug) {
   return rows[0] || null;
 }
 
-async function getDownloadPath(productId, user) {
+async function getDownloadPath(productId, user, ipAddress = null, userAgent = null) {
   const isAdmin = user && user.role === 'admin';
   const query = isAdmin
     ? `SELECT p.file_path
        FROM products p
        WHERE p.id = $1 AND p.is_active = true`
-    : `SELECT p.file_path
+    : `SELECT p.file_path, l.id AS license_id
        FROM products p
        JOIN licenses l ON l.product_id = p.id
        WHERE p.id = $1 AND p.is_active = true
@@ -47,6 +48,15 @@ async function getDownloadPath(productId, user) {
   const { rows } = await pool.query(query, params);
   const product = rows[0];
   if (!product) {
+    // Audit trail for rejected download attempts (no DB row to attach
+    // this to, since no matching/authorized license exists) — a
+    // lightweight server-log warning, additive only, no schema needed.
+    // eslint-disable-next-line no-console
+    console.warn('[security] Rejected product download attempt', {
+      productId,
+      userId: user && user.sub,
+      ipAddress,
+    });
     throw new ProductDownloadError('DOWNLOAD_FORBIDDEN', 'You do not have access to this product.', isAdmin ? 404 : 403);
   }
   if (!product.file_path) {
@@ -60,6 +70,19 @@ async function getDownloadPath(productId, user) {
   } catch {
     throw new ProductDownloadError('FILE_NOT_FOUND', 'Product file is not available.', 404);
   }
+
+  // Audit trail for successful downloads, reusing the existing
+  // license_activations log (same table activation/verify/reset use) —
+  // no new logging system, no change to any access-check above.
+  if (!isAdmin && product.license_id) {
+    await logActivationEvent(product.license_id, {
+      installationId: null,
+      event: 'DOWNLOAD_SUCCESS',
+      ipAddress,
+      userAgent,
+    });
+  }
+
   return filePath;
 }
 
