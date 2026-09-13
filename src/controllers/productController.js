@@ -2,7 +2,7 @@ const productService = require('../services/productService');
 
 async function download(req, res, next) {
   try {
-    const filePath = await productService.getDownloadPath(req.params.id, req.user);
+    const filePath = await productService.getDownloadPath(req.params.id, req.user, req.ip, req.get('user-agent'));
     res.sendFile(filePath, (err) => {
       if (err && !res.headersSent) next(err);
     });
