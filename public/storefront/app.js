@@ -706,11 +706,10 @@ function closeGate() {
   welcomeBackdrop.hidden = true;
   welcomeModal.classList.add('hidden');
 }
-
 async function onGateSuccess() {
-  closeGate();
-  if (!window.location.hash || window.location.hash === '#') window.location.hash = '#products';
-  await route();
+  closeGate(); // يُغلق نافذة الدخول فوراً
+  window.location.hash = '#products';
+  try { await route(); } catch (e) { console.error(e); }
 }
 
 gateLoginForm.addEventListener('submit', async (event) => {
