@@ -64,3 +64,9 @@ async function main() {
 if (require.main === module) {
   main();
 }
+
+// Exported so the boot-time bootstrap can reuse this exact logic without
+// going through main() — main() calls pool.end(), which would close the
+// connection pool the running server needs. CLI usage (`npm run seed`)
+// is unchanged and still goes through main().
+module.exports = { seedAdmin, seedDashboardProduct };
