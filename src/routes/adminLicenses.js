@@ -8,6 +8,9 @@ const router = express.Router();
 
 router.use(requireAdmin);
 
+// GET route to list all licenses for admin dashboard
+router.get('/', licenseController.adminList);
+
 router.post(
   '/',
   [
