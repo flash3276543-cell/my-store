@@ -121,15 +121,18 @@ async function api(path, options = {}) {
 function escapeAttribute(value) {
   return String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
 }
-
 function imageMarkup(url, alt, className = 'product-image') {
-  if (url) return `<img class="${className}" src="${escapeAttribute(url)}" alt="${escapeAttribute(alt)}">`;
+  // يضمن قراءة الرابط سواء كان imageUrl أو image_url
+  const validUrl = url || '';
+  if (validUrl) return `<img class="${className}" src="${escapeAttribute(validUrl)}" alt="${escapeAttribute(alt)}">`;
   return `<div class="${className} placeholder" aria-hidden="true">N</div>`;
 }
 
 function productCard(product) {
+  // تم التعديل هنا لقراءة product.imageUrl || product.image_url
+  const imgUrl = product.imageUrl || product.image_url;
   return `<article class="product-card glass" data-slug="${escapeAttribute(product.slug)}">
-    ${imageMarkup(product.image_url, product.name)}
+    ${imageMarkup(imgUrl, product.name)}
     <div class="product-card-body">
       <h3>${escapeAttribute(product.name)}</h3>
       <span class="product-price">${escapeAttribute(product.currency)} ${Number(product.price_cents / 100).toFixed(2)}</span>
@@ -137,6 +140,9 @@ function productCard(product) {
   </article>`;
 }
 
+
+
+{
 async function loadProducts() {
   setStatus(storeStatus, 'Loading products...');
   try {
@@ -161,8 +167,9 @@ function contactMarkup(productName) {
 }
 
 function renderSheet(product) {
+  const imgUrl = product.imageUrl || product.image_url;
   sheetContent.innerHTML = `
-    ${imageMarkup(product.image_url, product.name, 'sheet-media')}
+    ${imageMarkup(imgUrl, product.name, 'sheet-media')}
     <h2 id="sheetTitle">${escapeAttribute(product.name)}</h2>
     <div class="sheet-meta">
       <span>v${escapeAttribute(product.version)}</span>
@@ -172,6 +179,7 @@ function renderSheet(product) {
     <div id="orderPanel"></div>
     <button id="requestCodeButton" class="button sheet-cta button-outline" type="button">طلب كود التفعيل</button>
     <div id="sheetContactSlot"></div>
+  `;
   `;
   document.querySelector('#requestCodeButton').addEventListener('click', (event) => {
     event.currentTarget.remove();
