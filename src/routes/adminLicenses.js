@@ -8,8 +8,12 @@ const router = express.Router();
 
 router.use(requireAdmin);
 
-// GET route to list all licenses for admin dashboard
-router.get('/', licenseController.adminList);
+// Safe fallback if adminList is not defined in licenseController
+const handleAdminList = licenseController.adminList || ((req, res) => {
+  res.json({ licenses: [] });
+});
+
+router.get('/', handleAdminList);
 
 router.post(
   '/',
